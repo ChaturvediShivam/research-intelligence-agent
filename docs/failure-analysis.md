@@ -367,3 +367,115 @@ with "all 2 chunks" in the message; the cap accepts 4 and still rejects 9.
 inherited from `gather`'s default. Every other fan-out in this project
 (`run_process_stage`) already used `return_exceptions=True`; extraction was
 written later and did not, and no offline test ran enough chunks to notice.
+
+---
+
+## F-012 · The golden set measured alphabetical position, not retrieval
+
+**Milestone:** M7
+**Found by:** reading a baseline number that looked impossible — G03's
+`source_coverage` was 0.00 for a case whose single relevant document was in
+the corpus
+
+**Symptom.** Baseline `retrieval_relevance` 0.583, with recall 0.00 on four
+cases whose relevant documents plainly existed.
+
+**Cause.** `build_golden_v1.py` set `available_docs` to the whole 20-document
+corpus, **sorted alphabetically**. The discovery stage asks its search tool
+for at most 8 results per query. So every case discovered the same
+alphabetically-first eight documents, and `pra-solvency`, `hmrc-ipt`,
+`insurtech-funding` and others could never be discovered at all. Recall was
+measuring where a document's name fell in the alphabet.
+
+**Fix.** Each case now gets its judged documents plus distractors drawn in
+fixed order from the hard-negative pool, sized to fit inside the discovery
+cap. **No judgment was altered** — only which documents are made available.
+Re-measured: `retrieval_relevance` 0.583 → **0.833**, `source_coverage`
+0.750 → **1.000**.
+
+**Lesson recorded.** The first baseline number to distrust is the one that
+disagrees with something you can check by hand. A metric that silently
+depends on an unrelated implementation bound measures that bound.
+
+---
+
+## F-012b · The golden-set validator rejected a legitimate case shape
+
+Found immediately after: the validator refused any case that both judged a
+document relevant and expected UNKNOWN. That is exactly the shape of a
+paywall or fetch-failure case — the relevant source exists and cannot be
+read. The rule now applies only to `healthy` cases, and cases that make every
+source unreadable are instead *required* to expect UNKNOWN.
+
+---
+
+## F-013 · A guessed bound rejected a correct response, for the third time
+
+**Milestone:** M7
+**Found by:** the first judge call
+
+**Symptom.** `ValidationError: reason — String should have at most 600
+characters`. The judge's explanation of a five-criterion rubric score was
+longer than 600 characters, so the whole response was rejected.
+
+**Cause.** The same defect as F-004 (`restated_question`, 600) and F-011
+(`ChunkExtraction.items`, 3): an arbitrary `max_length` on a field a model
+writes, tighter than a correct answer needs.
+
+**Fix.** 600 → 2000.
+
+**Lesson recorded, three occurrences in.** My habit of bounding
+model-generated text fields tightly is a recurring source of defects, and in
+every case the bound was invented rather than measured. The bound should come
+from observed output — as the chunking and citation code already does — or be
+generous enough that only a runaway response hits it. Worth a standing check
+on any new schema field a model fills.
+
+---
+
+## F-014 · A successful run produced a near-empty report
+
+**Milestone:** M7 (the improvement cycle)
+**Found by:** baseline `report_quality` = 0.183, the weakest of the seven
+metrics
+
+**Symptom.** On a run with no source failures and no information gaps, the
+report collapsed to one generic limitation ("Citation verification proves a
+quote is present…") and one generic next step ("Corroborate the findings
+above…"). The rubric criteria "limitations specific to this run rather than
+generic boilerplate" and "next steps actionable and tied to a stated gap"
+both failed.
+
+**Cause.** `_limitations` and `_next_steps` were driven entirely by
+*failures*. A run where nothing failed therefore had nothing to say — which
+is precisely when a reader most needs to know what the findings still do not
+establish. Meanwhile the run held unused measured facts: on G02 all four
+supported claims had `corroboration == 1`, two were LOW confidence, and six
+of eight sources read were unvetted.
+
+**Fix.** Both functions now also report evidence-level limitations derived
+from existing verified output: uncorroborated claim count, LOW-confidence
+claim count, and unvetted-source composition, with next steps tied to those
+counts. No new model call, no schema change.
+
+**Outcome — and this is the part worth reading.** `report_quality` moved
+0.183 → 0.208. But `answer_relevance` moved 0.583 → 0.542 in the same run,
+and **my change cannot affect answer generation at all.** So I re-ran the
+evaluation on identical code to measure the judge's noise floor:
+
+| Run | answer_relevance | report_quality |
+|---|---|---|
+| baseline | 0.583 | 0.183 |
+| after change | 0.542 | 0.208 |
+| identical code, re-run | 0.583 | 0.200 |
+
+The judge varies by **±0.04** on 6 cases with no code change — larger than
+the +0.025 the change produced. **The improvement is therefore not
+demonstrated by the metric.** The change is kept because it is independently
+correct (it surfaces measured facts that were being discarded) and regresses
+none of the five deterministic metrics, but no claim is made that it improved
+report quality.
+
+**Lesson recorded.** A single before/after pair on a non-deterministic metric
+is not evidence. Measuring the noise floor cost one extra run and converted a
+tempting claim into an honest one.

@@ -239,7 +239,11 @@ def _limitations(
     return notes
 
 
-def _next_steps(gaps: list[InformationGap], assessments: list[SubQuestionAssessment]) -> list[str]:
+def _next_steps(
+    gaps: list[InformationGap],
+    assessments: list[SubQuestionAssessment],
+    coverage: SourceCoverage,
+) -> list[str]:
     """Next steps that follow from the gaps, in gap order."""
     steps: list[str] = []
     for gap in gaps:
@@ -270,6 +274,28 @@ def _next_steps(gaps: list[InformationGap], assessments: list[SubQuestionAssessm
                 if gap.what_would_resolve
                 else f"[{gap.sub_question_id}] Gather further evidence."
             )
+    # Steps tied to measured facts, for a run with no gaps. A single generic
+    # fallback failed the rubric's "actionable and tied to a stated gap"
+    # criterion on every successful run (F-014).
+    supported = [c for a in assessments for c in a.supporting_claims]
+    uncorroborated = [c for c in supported if c.corroboration <= 1]
+    low = [c for c in supported if c.confidence is Confidence.LOW]
+
+    if uncorroborated:
+        steps.append(
+            f"Corroborate the {len(uncorroborated)} uncorroborated claim(s) "
+            "against a second independent source before relying on them."
+        )
+    if low:
+        steps.append(
+            f"Replace the source behind the {len(low)} LOW-confidence claim(s) "
+            "with a primary or established secondary source."
+        )
+    if coverage.failed:
+        steps.append(
+            f"Retrieve the {coverage.failed} source(s) that could not be read, "
+            "or find an accessible equivalent."
+        )
     if not steps and assessments:
         steps.append(
             "Corroborate the findings above against an independent source before relying on them."
@@ -425,7 +451,7 @@ def build_report(result: RunResult) -> ResearchReport:
         information_gaps=gaps,
         source_coverage=coverage,
         limitations=_limitations(result, coverage, assessments),
-        recommended_next_steps=_next_steps(gaps, assessments),
+        recommended_next_steps=_next_steps(gaps, assessments, coverage),
         total_claims=len(claim_validation.claims) if claim_validation else 0,
         supported_claims=len(claim_validation.supported_claims) if claim_validation else 0,
         unknown_claims=len(claim_validation.unknown_claims) if claim_validation else 0,

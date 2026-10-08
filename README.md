@@ -96,7 +96,7 @@ claims.
 | 18 | Tool / function calling | `app/pipeline/discover.py` (Tool Runner over `SourceProvider`) | `tests/integration/test_orchestration.py` | ✅ M5 |
 | 19 | Agentic orchestration | `app/pipeline/orchestrator.py` | live e2e: 8 stages, 16 verified citations | ✅ M5 |
 | 20 | UNKNOWN / information gaps | `app/pipeline/assess.py`, `app/schemas/report.py` | `tests/integration/test_report_assessment.py` | ✅ M6 |
-| 21 | Evaluation harness | `app/evaluation/` | committed baseline | ⬜ M7 |
+| 21 | Evaluation harness | `app/evaluation/` | [`docs/evaluation.md`](docs/evaluation.md) — 7 metrics, committed baseline | ✅ M7 |
 | 22 | MCP tool layer | `app/mcp/server.py` | external client transcript | ⬜ M8 |
 | 23 | Prompt-injection resistance | `app/core/security.py` | injection corpus suite | ⬜ M9 |
 | 24 | Observability | `app/observability/trace.py` | per-stage trace assertions | ⬜ M9 |
@@ -115,7 +115,7 @@ claims.
 | M4 | Evidence + citation verification | ✅ live-verified |
 | M5 | Orchestration | ✅ live-verified end-to-end |
 | M6 | Report + UNKNOWN / information gaps | ✅ offline-verified |
-| M7 | Evaluation | ⬜ |
+| M7 | Evaluation | ✅ baseline + improvement cycle |
 | M8 | MCP | ⬜ |
 | M9 | Security / hardening | ⬜ |
 | M10 | Deployment + documentation | ⬜ |

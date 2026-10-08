@@ -119,3 +119,99 @@ harness prints a warning when asked for a cutoff at or above the corpus size.
 Measured per run and recorded here once M7 executes. Estimated beforehand at
 $3–8 per full pass; the estimate will be replaced by the measurement, not
 confirmed by it.
+
+---
+
+# M7 — the seven approved metrics
+
+Architecture §9 defines seven metrics; all seven are implemented and measured.
+Golden set: `evals/datasets/golden_v1` — 20 cases, 13 train / 7 holdout.
+Cases G01–G10 reuse the queries and judgments already annotated in
+`retrieval_v1` (written before retrieval was tuned); G11–G20 are failure-mode
+cases derived from documented system behaviour, each with its expected outcome
+stated in advance.
+
+Reproduce with `uv run python scripts/run_evaluation.py` (metrics 1–5, free)
+or `--judge` (adds 6–7, billable).
+
+## Baseline
+
+`evals/results/evaluation_baseline_d69164e.json`, golden_v1, eval_v1, k=5.
+
+| # | Metric | Value | Cases | Deterministic |
+|---|---|---|---|---|
+| 1 | retrieval_relevance | **0.833** | 18 | ✅ |
+| 2 | source_coverage | **1.000** | 18 | ✅ |
+| 3 | citation_correctness | **1.000** | 18 | ✅ |
+| 4 | unsupported_claim_rate | **0.000** | 18 | ✅ |
+| 5 | tool_selection | **1.000** | 20 | ✅ |
+| 6 | answer_relevance | **0.583** | 6 | ✗ |
+| 7 | report_quality | **0.183** | 6 | ✗ |
+
+Metric 1 decomposes as recall@5 = 0.833, MRR = 0.833, nDCG@5 = 0.829.
+Holdout split: retrieval_relevance 1.000, the other deterministic metrics
+equal to the full-set values.
+
+Also reported, though not one of the seven: `unknown_expectation_accuracy`
+= **0.900** — the share of cases whose answered/UNKNOWN outcome matched the
+advance annotation. Two cases miss it (G11, G19), both out-of-domain questions
+that the harness's scripted extractor answers anyway; the real extractor
+returns nothing for an irrelevant question, measured live in M4.
+
+## Improvement cycle
+
+**Weakness selected:** `report_quality` = 0.183, the lowest of the seven, and
+a property of deterministic M6 code rather than of a model.
+
+**Diagnosis (F-014):** on a run with no failures, `limitations` collapsed to
+one boilerplate caveat and `next_steps` to one generic fallback, while the run
+held unused measured facts — on G02, all four supported claims uncorroborated,
+two at LOW confidence, six of eight sources unvetted.
+
+**Change:** `_limitations` and `_next_steps` in `app/pipeline/assess.py` now
+also report evidence-level limitations derived from existing verified output.
+No new model call, no schema change.
+
+**Result:**
+
+| Metric | Baseline | After | Verdict |
+|---|---|---|---|
+| retrieval_relevance | 0.833 | 0.833 | unchanged |
+| source_coverage | 1.000 | 1.000 | unchanged |
+| citation_correctness | 1.000 | 1.000 | unchanged |
+| unsupported_claim_rate | 0.000 | 0.000 | unchanged |
+| tool_selection | 1.000 | 1.000 | unchanged |
+| answer_relevance | 0.583 | 0.542 | regressed |
+| report_quality | 0.183 | 0.208 | improved |
+
+**The improvement is not demonstrated.** `answer_relevance` moved further than
+`report_quality` did, and the change cannot affect answer generation. A third
+run on identical code gave answer_relevance 0.583 and report_quality 0.200 —
+so the judge's noise floor on 6 cases is **±0.04**, larger than the +0.025
+measured. The change is kept because it is independently correct and regresses
+none of the five deterministic metrics, not because the metric improved.
+
+A reverted earlier attempt is documented in F-014's neighbours: a dense
+similarity floor in retrieval, calibrated from measured similarities
+(relevant 0.582–0.638, off-domain 0.478–0.507). It cut a chunk from G16 — the
+paraphrase case dense retrieval exists for — while leaving both off-domain
+cases still answered, because the lexical half bypasses it. Reverted.
+
+## Reproducibility
+
+- **Metrics 1–5 are reproducible.** Identical across all three runs.
+- **Metrics 6–7 are not**, by design: they are LLM-judge scores. Measured
+  variation is ±0.04 on 6 cases.
+
+## Limitations
+
+- 20 cases, and metrics 6–7 judged on only 6 of them. Differences below ~0.05
+  on the judged metrics are noise.
+- Five of seven deterministic metrics sit at or near ceiling (1.000, 1.000,
+  0.000, 1.000), so they currently detect regressions rather than discriminate
+  between good and better.
+- The harness's LLM transport is scripted. Citation correctness is a genuine
+  measurement — the evaluator re-slices the stored source independently — but
+  answer text comes from a scripted synthesiser, so metrics 6–7 assess the
+  report's deterministic assembly more than a real model's prose.
+- Judgments are mine, single-annotator. Annotator bias is unmeasured.
