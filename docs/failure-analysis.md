@@ -591,3 +591,52 @@ is evidence that the code matches its assertions, not that the assertions
 describe the intended product. The cheapest guard found so far is asserting
 on a measured side effect — cost attributed across stages — rather than on a
 status string the code is free to set.
+
+---
+
+## F-018 · A failure code was counted as a rejected citation
+
+**Milestone:** M10, found by the first production research run
+
+**Symptom.** Production run `run_a16334dd6722474c` returned a report whose
+sub-questions reported `rejected_citation_count: 1` for SQ1 and SQ3, while
+the report's own `rejected_citations` total said `0`. The gap reason read
+*"1 citation(s) were produced and none survived verification against the
+stored source text."* **No citation had been produced at all** — both claims
+carried `failures: ['no_citation']` and an empty `citations` list.
+
+**Cause.** Two different quantities shared a name. At report level,
+`rejected_citations = claim_validation.rejected_count` counts citation
+*verdicts* that failed; a claim with no citation produces no verdict, so `0`
+was right. At sub-question level it was `sum(len(c.failures) for c in
+unknown)` — a count of failure *codes*. A claim rejected for carrying no
+citation has exactly one code, `no_citation`, so it was counted as one
+rejected citation. The two numbers could never agree, and the count had no
+relationship to citations at all: a claim with two failure codes would have
+reported two rejected citations.
+
+**Fix.** Count citations that failed verification:
+`sum(len(c.citations) - c.verified_citations for c in (*supported, *unknown))`.
+A claim with no citation contributes `0`. Supported claims are included
+because a claim can be supported by two citations and still have had a third
+rejected. With the count corrected, `_diagnose` no longer reaches
+`CITATIONS_REJECTED` for this run and reports `INSUFFICIENT_EVIDENCE` —
+*"evidence item(s) were extracted but none supported a citable claim"* —
+which is what actually happened.
+
+**Worth noting:** the bug inverted the meaning of the project's central
+guarantee. It told a reader that the stored source text had failed to support
+a quote, when the truth was that the model had declined to answer and offered
+no quote. The synthesis step behaved *correctly* — faced with one unvetted
+source that did not address the question, it said so instead of fabricating —
+and the reporting layer then misattributed that honesty to a verification
+failure. Three milestones of offline tests never caught it because no offline
+case produced a claim with zero citations alongside a sub-question that had
+retrieved evidence; the real web produced that combination on the first run.
+
+**Also observed in the same run, not bugs.** Two SEC EDGAR filings returned
+HTTP 403 and one primary source was a PDF, which the fetcher rejects by
+documented design (`Unsupported content type 'application/pdf'`). Both are
+real capability limits for a due-diligence agent whose preferred sources are
+regulatory filings, and both are recorded in docs/deployment.md rather than
+fixed here.

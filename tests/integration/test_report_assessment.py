@@ -628,3 +628,171 @@ class TestFailedSourceClassification:
         assert failed["cause"] == GapCause.ACCESS_RESTRICTED.value
         # And no gap was invented for a question that was answered.
         assert report.answered or report.partial
+
+
+class TestRejectedCitationAccounting:
+    """The report must not contradict itself, or blame the wrong thing.
+
+    Found by the first production research run (F-018). The sub-question
+    counter summed failure *codes*, so a claim rejected for carrying no
+    citation contributed one "rejected citation" — making the report's own
+    sub-questions sum to 2 while the report-level total said 0, and reporting
+    CITATIONS_REJECTED ("none survived verification against the stored source
+    text") about a claim that had offered no quote to verify.
+    """
+
+    def _report(self, claims: list[Claim]):  # type: ignore[no-untyped-def]
+        from app.pipeline.orchestrator import RunResult
+        from app.pipeline.validate import run_validate_stage
+        from app.schemas.runs import RunTrace
+
+        sources, texts = _refs()
+        validation, _ = run_validate_stage(claims, sources=sources, texts=texts)
+        return (
+            build_report(
+                RunResult(
+                    run_id="run_acct",
+                    request=ResearchRequest(question=QUESTION),
+                    status=RunStatus.COMPLETED,
+                    trace=RunTrace(run_id="run_acct"),
+                    plan=make_plan(("SQ1",)),
+                    claim_validation=validation,
+                    sources=sources,
+                    source_texts=texts,
+                )
+            ),
+            validation,
+        )
+
+    def test_a_claim_with_no_citation_is_not_a_rejected_citation(self) -> None:
+        """`no_citation` means none was offered, so nothing was rejected."""
+        report, validation = self._report(
+            [
+                Claim(
+                    claim_id="C1",
+                    sub_question_id="SQ1",
+                    text="The attached documents do not answer this question.",
+                )
+            ]
+        )
+
+        assert report.sub_questions[0].rejected_citation_count == 0
+        assert report.rejected_citations == 0
+        # The verifier never produced a verdict, because there was no citation.
+        assert validation.rejected_count == 0
+
+    def test_a_genuinely_rejected_citation_is_still_counted(self) -> None:
+        """Control: the counter must not have been zeroed out."""
+        sources, _ = _refs()
+        source_id = next(iter(sources))
+        report, validation = self._report(
+            [
+                Claim(
+                    claim_id="C1",
+                    sub_question_id="SQ1",
+                    text="The regulator confirmed a far higher figure.",
+                    citations=[
+                        Citation(
+                            source_id=source_id,
+                            start_char=0,
+                            end_char=30,
+                            cited_text="a quote that is not in the source text",
+                        )
+                    ],
+                )
+            ]
+        )
+
+        assert validation.rejected_count == 1
+        assert report.sub_questions[0].rejected_citation_count == 1
+        assert report.rejected_citations == 1
+
+    def test_sub_question_counts_sum_to_the_report_total(self) -> None:
+        """The invariant the production run violated."""
+        sources, _ = _refs()
+        source_id = next(iter(sources))
+        report, validation = self._report(
+            [
+                Claim(
+                    claim_id="C1",
+                    sub_question_id="SQ1",
+                    text="A claim that offered no quote at all.",
+                ),
+                Claim(
+                    claim_id="C2",
+                    sub_question_id="SQ1",
+                    text="A claim whose quote is not in the source.",
+                    citations=[
+                        Citation(
+                            source_id=source_id,
+                            start_char=0,
+                            end_char=30,
+                            cited_text="wording that appears nowhere in the stored text",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        assert sum(s.rejected_citation_count for s in report.sub_questions) == (
+            report.rejected_citations
+        )
+        assert sum(s.verified_citation_count for s in report.sub_questions) == (
+            report.verified_citations
+        )
+        assert report.rejected_citations == validation.rejected_count == 1
+
+
+class TestGapCauseForRejectedCitations:
+    """The cause function, with counts supplied directly.
+
+    The accounting fix feeds this: with `rejected_citations` no longer
+    inflated by failure codes, a claim that offered no quote stops being
+    reported as a citation that failed verification.
+    """
+
+    def _cause(self, **kw: object):  # type: ignore[no-untyped-def]
+        from app.pipeline.assess import _diagnose
+
+        args: dict[str, object] = {
+            "sources_discovered": 2,
+            "sources_fetched": 1,
+            "chunks_retrieved": 3,
+            "evidence_items": 2,
+            "verified_citations": 0,
+            "rejected_citations": 0,
+            "extraction_failed": False,
+            "all_sources_unvetted": False,
+            "source_failures": [],
+        }
+        args.update(kw)
+        return _diagnose(**args)  # type: ignore[arg-type]
+
+    def test_a_rejected_citation_is_reported_as_such(self) -> None:
+        cause, why = self._cause(rejected_citations=2)
+        assert cause is GapCause.CITATIONS_REJECTED
+        assert "2 citation(s) were produced" in why
+
+    def test_no_citation_is_not_reported_as_a_failed_verification(self) -> None:
+        """What the production run got wrong: 0 rejected must not claim the
+        stored source text failed to support a quote."""
+        cause, why = self._cause(rejected_citations=0)
+        assert cause is not GapCause.CITATIONS_REJECTED
+        assert "survived verification" not in why
+
+    def test_the_production_runs_cause_is_insufficient_evidence(self) -> None:
+        """What the production run should have said.
+
+        Evidence was extracted from the one readable source, and none of it
+        supported a citable claim. `WEAK_SOURCE_QUALITY` is deliberately not
+        reachable here: it describes a run that *did* verify citations, but
+        only from unvetted sources.
+        """
+        cause, why = self._cause(rejected_citations=0, all_sources_unvetted=True)
+        assert cause is GapCause.INSUFFICIENT_EVIDENCE
+        assert "none supported a citable claim" in why
+
+    def test_unvetted_only_is_the_cause_once_citations_do_verify(self) -> None:
+        cause, why = self._cause(verified_citations=3, all_sources_unvetted=True)
+        assert cause is GapCause.WEAK_SOURCE_QUALITY
+        assert "unvetted" in why

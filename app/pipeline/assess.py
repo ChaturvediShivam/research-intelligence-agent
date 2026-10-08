@@ -377,7 +377,18 @@ def build_report(result: RunResult) -> ResearchReport:
         supported = supported_by_sq.get(sqid, [])
         unknown = unknown_by_sq.get(sqid, [])
         verified_citations = sum(c.verified_citations for c in supported)
-        rejected_citations = sum(len(c.failures) for c in unknown if c.failures)
+        # Citations that failed verification — not failure codes. Counting
+        # `len(c.failures)` conflated the two: a claim rejected for carrying
+        # no citation at all has the code `no_citation`, which was counted as
+        # one rejected citation. That made the report contradict itself
+        # (sub-questions summing to 2 while the report said 0) and blamed the
+        # stored source text for a model that had simply declined to answer.
+        # Found in the first production run; see docs/failure-analysis.md
+        # F-018. Supported claims are included because a claim can be
+        # supported by two citations and still have had a third rejected.
+        rejected_citations = sum(
+            len(c.citations) - c.verified_citations for c in (*supported, *unknown)
+        )
         chunks_retrieved = len(result.retrieved.get(sqid, []))
         evidence_count = evidence_by_sq.get(sqid, 0)
 
