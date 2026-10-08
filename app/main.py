@@ -20,6 +20,7 @@ from app.core.logging import configure_logging
 from app.llm.client import LLMClient
 from app.llm.pricing import is_priced
 from app.storage.runs import RunRepository
+from app.tools.registry import ToolContext
 
 logger = structlog.get_logger(__name__)
 
@@ -63,6 +64,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         repo.close()
         client: LLMClient = app.state.llm_client
         await client.aclose()
+        components: ToolContext = app.state.components
+        await components.aclose()
         logger.info("application_stop")
 
 
@@ -83,6 +86,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved
     app.state.run_repository = RunRepository(resolved.database_path)
     app.state.llm_client = LLMClient(resolved)
+    # Search provider, fetcher and embedder for the research pipeline. Built
+    # lazily inside ToolContext, so constructing the app stays cheap and an
+    # instance that never runs research never loads the embedding model.
+    # Plain attributes rather than a `yield` dependency on purpose: a
+    # generator dependency is torn down when the response is sent, and the
+    # pipeline runs in a BackgroundTask *after* that — it would be handed
+    # closed clients.
+    app.state.components = ToolContext(settings=resolved)
 
     register_exception_handlers(app)
     app.include_router(routes_health.router)

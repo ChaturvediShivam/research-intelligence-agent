@@ -549,3 +549,45 @@ are undetectable by design** — INJ10 (social engineering) and INJ14
 word list until it caught them and started flagging real documents, both are
 documented as the reason the defence has to be structural. The test asserts
 the exact set `{INJ10, INJ14}`, so the limitation cannot drift unnoticed.
+
+---
+
+## F-017 · The HTTP API never left the planning stage, and a test confirmed it
+
+**Milestone:** found in M10, introduced in M1
+
+**Symptom.** The deployed service accepted a research question, returned
+`status: "completed"`, and produced a plan and nothing else — no sources, no
+evidence, no citations, no report. The live run that exposed it reported
+`cost.by_stage = {"plan": 0.064917}`: one stage billed, where a complete run
+bills eight.
+
+**Cause.** `app/api/routes_research.py` was the M1 implementation. Its
+background task called `run_plan_stage` and then set `COMPLETED`, with the
+comment *"M1 ends after planning. Stages 2-10 extend this in later
+milestones."* Those milestones extended `ResearchOrchestrator` and the MCP
+tool registry; the HTTP route was never migrated. The pipeline was complete
+and fully tested — it simply had no caller on the REST surface.
+
+**Why it survived nine milestones.** `tests/integration/test_research_api.py`
+asserted `detail["status"] == RunStatus.COMPLETED.value` after planning
+alone. The bug was encoded as the expected contract, so every suite run since
+M1 **actively confirmed it**. A scan for `TODO|FIXME|stub|NotImplementedError`
+across `app/` returned nothing relevant: the only marker was a prose comment
+in a docstring, which no tool treats as incomplete work.
+
+**Fix.** The route now builds the real `ResearchOrchestrator`, adopts the
+`run_id` already created by the repository, applies `request.max_sources`
+through `Settings.model_copy`, persists plan, report and trace, and takes its
+terminal status from `result.status` rather than hard-coding one. A `report`
+column was added as an additive migration, because the production database on
+Render's mounted disk already existed without it.
+
+**Worth noting:** this is the same class as F-012 — a test that measured the
+wrong thing and passed. Both were found by checking an *external* artifact
+(there, the golden set's discoverability; here, a live run's per-stage cost)
+rather than by reading code or trusting a green suite. A passing test suite
+is evidence that the code matches its assertions, not that the assertions
+describe the intended product. The cheapest guard found so far is asserting
+on a measured side effect — cost attributed across stages — rather than on a
+status string the code is free to set.

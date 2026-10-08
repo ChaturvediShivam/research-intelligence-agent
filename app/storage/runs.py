@@ -16,6 +16,7 @@ from pathlib import Path
 import structlog
 
 from app.core.errors import NotFoundError
+from app.schemas.report import ResearchReport
 from app.schemas.research import ResearchPlan, ResearchRequest, ResearchRun, RunStatus
 from app.schemas.runs import RunTrace
 from app.storage.db import connect, init_schema
@@ -88,6 +89,25 @@ class RunRepository:
         if cursor.rowcount == 0:
             raise NotFoundError(f"Run {run_id!r} does not exist.", details={"run_id": run_id})
 
+    async def save_report(self, run_id: str, report: ResearchReport) -> None:
+        """Persist the final report, so a completed run survives a restart.
+
+        Separate from `save_plan` rather than folded into one write: the plan
+        exists from stage 1 and the report only from stage 8, and a run that
+        failed in between must keep the plan it did produce.
+        """
+        async with self._write_lock:
+            await asyncio.to_thread(self._update_report, run_id, report)
+
+    def _update_report(self, run_id: str, report: ResearchReport) -> None:
+        with self._conn:
+            cursor = self._conn.execute(
+                "UPDATE runs SET report = ?, updated_at = ? WHERE id = ?",
+                (report.model_dump_json(), _now(), run_id),
+            )
+        if cursor.rowcount == 0:
+            raise NotFoundError(f"Run {run_id!r} does not exist.", details={"run_id": run_id})
+
     async def save_trace(self, run_id: str, trace: RunTrace) -> None:
         async with self._write_lock:
             await asyncio.to_thread(self._update_trace, run_id, trace)
@@ -111,6 +131,20 @@ class RunRepository:
         cursor = self._conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,))
         row: sqlite3.Row | None = cursor.fetchone()
         return row
+
+    async def get_report(self, run_id: str) -> ResearchReport | None:
+        """Return the persisted report, or None if this run never produced one.
+
+        Read separately rather than hung off `ResearchRun`, because
+        `app.schemas.research` cannot import `app.schemas.report` — the import
+        graph runs research -> report -> evidence -> research. This mirrors
+        `get_trace`, which exists for the same reason.
+        """
+        row = await asyncio.to_thread(self._select, run_id)
+        if row is None:
+            raise NotFoundError(f"Run {run_id!r} does not exist.", details={"run_id": run_id})
+        raw = row["report"]
+        return ResearchReport.model_validate_json(raw) if raw else None
 
     async def get_trace(self, run_id: str) -> RunTrace | None:
         row = await asyncio.to_thread(self._select, run_id)

@@ -26,6 +26,7 @@ this would be the orchestrator leaking into stages that are already verified.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import structlog
@@ -60,6 +61,13 @@ from app.tools.fetch import SourceFetcher
 from app.tools.search import SourceProvider
 
 logger = structlog.get_logger(__name__)
+
+
+# Called after each stage is recorded, with the outcome and the run's status
+# at that moment. Synchronous and best-effort by design: the orchestrator owns
+# the pipeline, and an observer must not be able to slow it, reorder it or
+# fail it. A caller needing to await something should hand off, not block.
+StageObserver = Callable[[StageOutcome, RunStatus], None]
 
 
 @dataclass(slots=True)
@@ -155,12 +163,15 @@ class ResearchOrchestrator:
         fetcher: SourceFetcher,
         embedder: Embedder,
         settings: Settings,
+        on_stage: StageObserver | None = None,
     ) -> None:
         self._client = client
         self._provider = provider
         self._fetcher = fetcher
         self._embedder = embedder
         self._settings = settings
+        # Keyword-only with a default, so every existing caller is unaffected.
+        self._on_stage = on_stage
 
     # -- helpers ----------------------------------------------------------
 
@@ -188,7 +199,21 @@ class ResearchOrchestrator:
         result.stages.append(outcome)
         if outcome.metric is not None:
             result.trace.stages.append(outcome.metric)
+        self._notify(outcome, result.status)
         return outcome
+
+    def _notify(self, outcome: StageOutcome, status: RunStatus) -> None:
+        """Tell the observer, and never let it break the run.
+
+        A caller's logging or progress write failing is not a research
+        failure, so it is logged and swallowed here rather than propagated.
+        """
+        if self._on_stage is None:
+            return
+        try:
+            self._on_stage(outcome, status)
+        except Exception:  # noqa: BLE001 - an observer must not fail a run
+            logger.exception("stage_observer_failed", stage=outcome.stage.value)
 
     def _record_raised_stage(self, result: RunResult, exc: PipelineStageError) -> None:
         """Mark the stage that raised as FAILED, and the rest as SKIPPED.
@@ -262,14 +287,19 @@ class ResearchOrchestrator:
 
     # -- the run ----------------------------------------------------------
 
-    async def run(self, request: ResearchRequest) -> RunResult:
+    async def run(self, request: ResearchRequest, *, run_id: str | None = None) -> RunResult:
         """Execute the pipeline for one request.
 
         Returns a `RunResult` in every case, including failure: a caller needs
         the partial outputs and the stage statuses to understand what
         happened, and an exception would discard both.
+
+        `run_id` adopts an id the caller already owns. The HTTP API creates the
+        run row before scheduling the pipeline, so minting a second id here
+        would key the trace to an id the caller never sees. Omitted (MCP, the
+        evaluation runner, tests), a fresh id is generated as before.
         """
-        run_id = new_run_id()
+        run_id = run_id or new_run_id()
         result = RunResult(
             run_id=run_id,
             request=request,

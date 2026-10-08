@@ -52,7 +52,15 @@ class TestPollRun:
         assert body["error"]["details"]["run_id"] == "run_doesnotexist"
 
 
-class TestFullM1Path:
+class TestPlanningOverHttp:
+    """Planning, persistence and cost over HTTP.
+
+    `client_with_fake_llm` scripts the planning call only, so these runs fail
+    at discovery. That is the point: the plan a failed run produced must still
+    be persisted and returned. A completed run is covered in
+    test_research_api_pipeline.py, against the full fake pipeline.
+    """
+
     def test_plan_is_produced_persisted_and_returned(
         self, client_with_fake_llm: tuple[TestClient, FakeAnthropic]
     ) -> None:
@@ -61,11 +69,16 @@ class TestFullM1Path:
 
         detail = c.get(f"/research/{run_id}").json()
 
-        assert detail["status"] == RunStatus.COMPLETED.value
+        # The run reaches discovery and fails there, because this fake cannot
+        # search. Before M10 the route stopped after planning and reported
+        # COMPLETED, so a plan-only run was indistinguishable from a finished
+        # one (F-017).
+        assert detail["status"] == RunStatus.FAILED.value
         assert detail["question"] == QUESTION
-        assert detail["error"] is None
+        assert detail["error"].startswith("discover:")
 
-        # The plan survived a round trip through SQLite and still validates.
+        # The plan survived a round trip through SQLite and still validates,
+        # even though the run as a whole failed after producing it.
         plan = ResearchPlan.model_validate(detail["plan"])
         assert len(plan.sub_questions) == 2
         assert [sq.id for sq in plan.ordered()] == ["SQ1", "SQ2"]
@@ -84,7 +97,12 @@ class TestFullM1Path:
         assert cost is not None
         assert cost["total_usd"] > 0
         # Attribution per stage is what makes the routing decision reviewable.
-        assert set(cost["by_stage"]) == {"plan"}
+        # `plan` spent; `assess` is the free stage that always runs, so a
+        # failed run still reports its gaps. Discovery failed before spending
+        # anything. A completed run attributes cost across every stage —
+        # asserted in test_research_api_pipeline.py.
+        assert set(cost["by_stage"]) == {"plan", "assess"}
+        assert cost["by_stage"]["assess"] == 0.0
         assert cost["input_tokens"] == 1000
         assert cost["output_tokens"] == 500
         assert cost["total_duration_ms"] >= 0
@@ -96,12 +114,20 @@ class TestFullM1Path:
     ) -> None:
         c, fake = client_with_fake_llm
         first = c.post("/research", json={"question": QUESTION}).json()["run_id"]
-        # The fake has one scripted outcome, so the second run's stage fails.
+        # The fake has one scripted plan, so the second run fails a stage
+        # earlier than the first. The two runs must not share state.
         second = c.post("/research", json={"question": QUESTION}).json()["run_id"]
 
         assert first != second
-        assert c.get(f"/research/{first}").json()["status"] == "completed"
-        assert c.get(f"/research/{second}").json()["status"] == "failed"
+        first_detail = c.get(f"/research/{first}").json()
+        second_detail = c.get(f"/research/{second}").json()
+
+        # Both fail, but at different stages — which is the independence this
+        # test is for: run 1 got the scripted plan, run 2 got nothing.
+        assert first_detail["plan"] is not None
+        assert first_detail["error"].startswith("discover:")
+        assert second_detail["plan"] is None
+        assert second_detail["error"].startswith("plan:")
         del fake
 
 

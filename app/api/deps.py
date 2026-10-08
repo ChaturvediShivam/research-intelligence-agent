@@ -16,6 +16,7 @@ from fastapi import Depends, Request
 from app.core.config import Settings
 from app.llm.client import LLMClient
 from app.storage.runs import RunRepository
+from app.tools.registry import ToolContext
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -46,6 +47,22 @@ def get_llm_client(request: Request) -> LLMClient:
     return client
 
 
+def get_components(request: Request) -> ToolContext:
+    """Return the shared pipeline components.
+
+    `ToolContext` already builds the search provider, fetcher and embedder
+    lazily and closes whatever it built, which is exactly what the HTTP layer
+    needs — so it is reused rather than reimplemented. Lazy matters here: the
+    embedding model takes about 14 seconds to load on first use, and an app
+    that only ever serves /health must not pay for it.
+    """
+    components = request.app.state.components
+    if not isinstance(components, ToolContext):  # pragma: no cover - defensive
+        raise RuntimeError("app.state.components is not configured; use create_app().")
+    return components
+
+
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 RunRepositoryDep = Annotated[RunRepository, Depends(get_run_repository)]
 LLMClientDep = Annotated[LLMClient, Depends(get_llm_client)]
+ComponentsDep = Annotated[ToolContext, Depends(get_components)]

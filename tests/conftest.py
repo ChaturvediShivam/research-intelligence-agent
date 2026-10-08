@@ -18,7 +18,12 @@ from app.core.config import Settings
 from app.llm.client import LLMClient
 from app.main import create_app
 from app.schemas.research import ResearchPlan, SourceType, SubQuestion
+from app.tools.fetch import SourceFetcher
+from app.tools.registry import ToolContext
 from tests.fixtures.fake_anthropic import FakeAnthropic, FakeResponse
+from tests.fixtures.fake_embedder import FakeEmbedder
+from tests.fixtures.fake_pipeline import FakeSourceProvider
+from tests.security.test_ssrf import FakeResolver
 
 
 @pytest.fixture
@@ -63,6 +68,23 @@ def sample_plan() -> ResearchPlan:
     )
 
 
+def fake_components(settings: Settings) -> ToolContext:
+    """Pipeline components with no network and no model download.
+
+    The route builds the orchestrator from `app.state.components`, and
+    constructing an orchestrator reads every component — so without this the
+    real `FastEmbedEmbedder` would load an ONNX model in any test that posts
+    a research question. Offline and fast is a property of the suite worth
+    keeping.
+    """
+    return ToolContext(
+        settings=settings,
+        _provider=FakeSourceProvider([]),
+        _fetcher=SourceFetcher(settings, resolver=FakeResolver()),
+        _embedder=FakeEmbedder(),
+    )
+
+
 @pytest.fixture
 def client(test_settings: Settings) -> Iterator[TestClient]:
     """App with no LLM available — for routing, validation and error paths."""
@@ -76,12 +98,18 @@ def client_with_fake_llm(
 ) -> Iterator[tuple[TestClient, FakeAnthropic]]:
     """App whose LLM transport is a fake returning `sample_plan`.
 
-    The background task runs for real, so this exercises the full M1 path
-    (route → background → stage → persistence) without a billable call.
+    The background task runs the real pipeline, so this exercises
+    route → background → orchestrator → persistence without a billable call.
+    `FakeAnthropic` scripts the planning call only and exposes no `beta`
+    namespace, so discovery fails and the run is FAILED at stage 2 — which
+    makes this the right fixture for "planning works and is persisted", and
+    the wrong one for a completed run. For that, see
+    tests/integration/test_research_api_pipeline.py.
     """
     app = create_app(test_settings)
     fake = FakeAnthropic([FakeResponse(parsed_output=sample_plan)])
     app.state.llm_client = LLMClient(test_settings, client=fake)
+    app.state.components = fake_components(test_settings)
     with TestClient(app) as c:
         yield c, fake
 
@@ -103,5 +131,6 @@ def client_with_failing_llm(test_settings: Settings) -> Iterator[TestClient]:
             return None
 
     app.state.llm_client = LLMClient(test_settings, client=FailingClient())
+    app.state.components = fake_components(test_settings)
     with TestClient(app) as c:
         yield c
