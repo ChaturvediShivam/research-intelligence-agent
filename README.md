@@ -102,7 +102,7 @@ claims.
 | 24 | Observability | `app/observability/trace.py` | `tests/integration/test_observability.py` — 24 trace assertions | ✅ M9 |
 | 25 | Cost & latency measurement | `app/llm/pricing.py`, `app/schemas/runs.py` | [`docs/cost-latency.md`](docs/cost-latency.md) — full-pipeline figures, measured/derived/unavailable | ✅ M9 |
 | 26 | Testing & CI | `tests/`, `.github/workflows/ci.yml` | CI green | ✅ M0 |
-| 27 | Deployment | `Dockerfile`, Render | live URL | ⬜ M10 |
+| 27 | Deployment | `Dockerfile`, `render.yaml` | [`docs/deployment.md`](docs/deployment.md) — image builds and runs; **no live URL** | 🟡 M10 |
 
 ## Build status
 
@@ -118,7 +118,29 @@ claims.
 | M7 | Evaluation | ✅ baseline + improvement cycle |
 | M8 | MCP | ✅ 4 tools, no eval regression |
 | M9 | Security / hardening | ✅ injection corpus, tracing, real cost/latency |
-| M10 | Deployment + documentation | ⬜ |
+| M10 | Deployment + documentation | 🟡 container verified; Render not deployed |
+
+## Deployment
+
+The container is verified; **there is no live public URL.** Full detail, and
+an explicit verified / documented / not-verified breakdown, in
+[`docs/deployment.md`](docs/deployment.md).
+
+```bash
+podman build -t ria:m10 -f Dockerfile .     # or docker build
+podman run -d -e PORT=8000 -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... ria:m10
+uv run python scripts/smoke_test.py http://127.0.0.1:8000
+```
+
+| | Status |
+|---|---|
+| Image build, container runtime, `/health`, `/ready`, smoke test (4/4) | ✅ verified |
+| `render.yaml` blueprint and deployment instructions | 📄 documented |
+| Render deployment and live URL | ❌ not verified — no Render access or git remote here |
+
+The deployed surface is the FastAPI service in `app/main.py`. The MCP server
+(`app/mcp/server.py`) is stdio-only by design and is run locally by an MCP
+client, not deployed — see [`docs/mcp.md`](docs/mcp.md).
 
 ## Running it
 

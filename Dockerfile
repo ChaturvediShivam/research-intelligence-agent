@@ -29,14 +29,19 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     ENVIRONMENT=production \
-    LOG_JSON=true
+    LOG_JSON=true \
+    PORT=8000
 
 USER appuser
 EXPOSE 8000
 
 # Liveness only — /ready depends on configuration and would fail the container
 # for a missing key, which is an operator problem, not a liveness problem.
+# Reads $PORT so the check follows the port the server actually bound.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status==200 else 1)"
+    CMD ["sh", "-c", "python -c \"import os,urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','8000')+'/health', timeout=4).status==200 else 1)\""]
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form so $PORT expands. Render and most PaaS inject PORT and expect the
+# process to bind it; an exec-form CMD cannot expand a variable, so the port
+# was previously pinned to 8000 and the injected value silently ignored.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\""]

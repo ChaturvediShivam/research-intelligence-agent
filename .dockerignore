@@ -1,0 +1,41 @@
+# Secrets first. The Dockerfile copies only named paths, so none of these
+# would reach the image anyway — this is defence in depth plus a much smaller
+# build context.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# VCS and local tooling
+.git
+.gitignore
+.github
+.venv
+venv/
+.ruff_cache
+.mypy_cache
+.pytest_cache
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Not needed at runtime
+tests/
+evals/
+scripts/
+docs/
+notebooks/
+htmlcov/
+.coverage
+coverage.xml
+
+# Local data and build output
+data/
+*.db
+*.sqlite
+*.sqlite3
+dist/
+build/
+*.egg-info/

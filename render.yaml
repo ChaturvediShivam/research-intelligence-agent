@@ -1,0 +1,52 @@
+# Render blueprint. Builds the repository's existing Dockerfile; no separate
+# build pipeline and no managed database, because the service's default
+# vector backend is SQLite inside the container.
+#
+# NOT YET DEPLOYED. This file is deployment-ready configuration, not evidence
+# of a running service — see docs/deployment.md for what is and is not
+# verified.
+services:
+  - type: web
+    name: research-intelligence-agent
+    runtime: image
+    plan: starter
+    region: oregon
+
+    # Render builds the Dockerfile at the repository root and injects PORT,
+    # which the container's CMD binds.
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Liveness only. /ready reports whether a key is configured and would
+    # keep the instance out of service for an operator problem rather than a
+    # process one.
+    healthCheckPath: /health
+
+    envVars:
+      # The only secret. sync:false means Render prompts for it rather than
+      # reading it from this file, so it is never committed.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_JSON
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+
+      # Cost ceiling per run, enforced in app/pipeline/orchestrator.py. Set
+      # explicitly here rather than relying on the default, because the
+      # default is tuned for local work.
+      - key: MAX_COST_USD_PER_RUN
+        value: "1.0"
+      - key: MAX_SOURCES_PER_RUN
+        value: "8"
+
+    # SQLite and the embedding model cache live on disk. Without this the
+    # chunk index and the downloaded fastembed model are lost on every
+    # restart, which works but re-downloads the model on each cold start.
+    disk:
+      name: data
+      mountPath: /app/data
+      sizeGB: 1

@@ -1,0 +1,206 @@
+# Deployment
+
+**Status summary, stated before any detail, because the distinction matters:**
+
+| Item | Status |
+|---|---|
+| Production `Dockerfile` | ✅ **VERIFIED** — builds and runs |
+| Image build | ✅ **VERIFIED** — Podman 6.0.2, `localhost/ria:m10` |
+| Container runtime | ✅ **VERIFIED** — starts clean, non-root, honours `$PORT` |
+| Health / readiness | ✅ **VERIFIED** — HTTP 200 from a running container |
+| Smoke test | ✅ **VERIFIED** — 4/4 checks against the live container |
+| `render.yaml` | 📄 **DOCUMENTED** — deployment-ready, never applied |
+| Render deployment | ❌ **NOT VERIFIED** — no Render access from this environment |
+| Live public URL | ❌ **DOES NOT EXIST** |
+
+Nothing below claims a running public service. There isn't one.
+
+## Architecture
+
+Two entry points, and only one is meant to be public:
+
+```
+                    ┌──────────────────────────────┐
+  public HTTP  ───►  │ app/main.py  (FastAPI)       │  ← deployed
+                    │  /health  /ready  /research  │
+                    └──────────────┬───────────────┘
+                                   │
+                    ┌──────────────▼───────────────┐
+                    │ app/pipeline/orchestrator.py │
+                    └──────────────┬───────────────┘
+                                   │
+  local MCP client ─(stdio)─►  app/mcp/server.py ──┘
+```
+
+`app/mcp/server.py` is **stdio only** and is deliberately not deployed. An MCP
+client runs it as a local subprocess; exposing it over HTTP would mean
+inventing a transport and an auth story that nothing has asked for, so M10
+deploys the HTTP service that already exists.
+
+## Local development
+
+```bash
+uv sync --extra retrieval --extra mcp
+cp .env.example .env            # then add your key
+uv run uvicorn app.main:app --reload
+uv run pytest                   # 898 tests, offline
+```
+
+## Docker build — verified
+
+```bash
+podman build -t ria:m10 -f Dockerfile .      # or: docker build -t ria:m10 .
+```
+
+Multi-stage: dependencies resolve in the builder and only the virtualenv and
+`app/` ship. The runtime image installs no compiler and runs as uid 10001.
+
+Verified with Podman 6.0.2 on macOS/arm64. The Dockerfile is standard and
+contains nothing Podman-specific, but **it has not been built with Docker
+itself** — Docker is not installed in this environment.
+
+One Podman-specific note: Podman's default OCI image format ignores
+`HEALTHCHECK` and warns about it at build time. Docker and Render honour it.
+Not a defect in the Dockerfile.
+
+## Docker run — verified
+
+```bash
+podman run -d --name ria -e PORT=8000 -p 8000:8000 \
+  -e ANTHROPIC_API_KEY=sk-ant-... ria:m10
+```
+
+The container binds `$PORT`, falling back to 8000. That matters for Render,
+which injects `PORT` and expects the process to use it — see the bug note
+below.
+
+Verified behaviour, from a real run:
+
+```
+$ podman run -d --name ria-m10 -e PORT=9137 -p 9137:9137 ria:m10
+$ curl -s http://127.0.0.1:9137/health
+{"status":"ok","version":"0.1.0"}                                    # HTTP 200
+
+$ curl -s http://127.0.0.1:9137/ready
+{"ready":false,"environment":"production","vector_backend":"sqlite",
+ "anthropic_key_configured":false,"missing":["ANTHROPIC_API_KEY"]}    # HTTP 200
+
+$ podman exec ria-m10 id
+uid=10001(appuser) gid=10001(appuser) groups=10001(appuser)
+```
+
+With a key supplied, `/ready` returns `{"ready":true, ..., "missing":[]}`.
+Startup logs are JSON, carry no secret, and shutdown is clean (exit code 0).
+
+## Environment variables
+
+Every variable below exists in `app/core/config.py`. **None is required for
+the process to start** — the service starts and serves `/health` without a
+key and reports itself not-ready, which is the correct behaviour for a
+liveness probe.
+
+| Variable | Required for research | Default | Notes |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | **yes** | – | The only secret. Set it in Render's dashboard, never in a file. |
+| `PORT` | no | `8000` | Injected by Render; the container binds it. |
+| `ENVIRONMENT` | no | `local` | Set to `production`. |
+| `LOG_JSON` | no | `false` | Set to `true` in production. |
+| `LOG_LEVEL` | no | `INFO` | |
+| `MAX_COST_USD_PER_RUN` | no | `2.0` | Per-run ceiling, enforced in the orchestrator. |
+| `MAX_SOURCES_PER_RUN` | no | `12` | Bounds cost and latency. |
+| `PLANNING_MODEL` | no | `claude-opus-5-5` | |
+| `EXTRACTION_MODEL` | no | `claude-haiku-4-5` | |
+| `SYNTHESIS_MODEL` | no | `claude-opus-5-5` | |
+| `RETRIEVAL_TOP_K` | no | `12` | |
+| `CHUNK_TOKENS` / `CHUNK_OVERLAP_TOKENS` | no | `512` / `64` | |
+| `EMBEDDING_MODEL` | no | `BAAI/bge-small-en-v1.5` | Downloaded on first use. |
+| `VECTOR_BACKEND` | no | `sqlite` | `postgres` additionally needs `POSTGRES_DSN`. |
+| `POSTGRES_DSN` | only if `VECTOR_BACKEND=postgres` | – | Secret. |
+| `DATABASE_PATH` | no | `data/runs.db` | Put on the mounted disk. |
+| `FETCH_TIMEOUT_SECONDS` | no | `20.0` | |
+| `ALLOWED_SOURCE_DOMAINS` / `BLOCKED_SOURCE_DOMAINS` | no | empty | Domain policy. |
+
+## Render deployment — NOT VERIFIED
+
+`render.yaml` is a complete blueprint: Docker runtime, `/health` as the health
+check path, `ANTHROPIC_API_KEY` as `sync: false` so Render prompts for it
+rather than reading it from the repository, and a 1 GB disk at `/app/data` so
+the SQLite index and the embedding-model cache survive a restart.
+
+**It has never been applied.** This environment has no Render CLI, no Render
+credentials, and the repository has no git remote — Render deploys from a
+connected Git repository, so there is nothing for it to deploy from. Rather
+than simulate a deployment, here is exactly what a deployment requires:
+
+1. Push the repository to GitHub or GitLab.
+2. In Render, **New → Blueprint**, and select the repository. Render reads
+   `render.yaml`.
+3. When prompted, paste `ANTHROPIC_API_KEY`. It is the only value Render asks
+   for; everything else is in the blueprint.
+4. Wait for the first build. It is slow — the image installs `fastembed` and
+   downloads the embedding model on first use.
+5. Confirm the service is live:
+
+```bash
+curl -s https://<service>.onrender.com/health
+curl -s https://<service>.onrender.com/ready
+uv run python scripts/smoke_test.py https://<service>.onrender.com
+```
+
+`/ready` should report `"ready": true`. If it reports
+`"missing": ["ANTHROPIC_API_KEY"]`, the key did not reach the service.
+
+A note on the `starter` plan: it idles after inactivity, so the first request
+after an idle period will be slow, and research runs are long-lived requests.
+The free plan's 512 MB is likely too small for the embedding model.
+
+## Production smoke test
+
+```bash
+uv run python scripts/smoke_test.py https://<service>.onrender.com
+```
+
+Four checks, all free — no research endpoint is touched, because proving the
+HTTP server works should not cost money:
+
+1. `/health` returns 200 with JSON and `status: "ok"`
+2. `/ready` returns 200 and reports key configuration **as a boolean**
+3. an unknown route returns 404 rather than a 500 with a stack trace
+4. no response carries a secret value or a traceback
+
+Exit code 0 on success, so it works as a post-deploy gate.
+
+Verified against the local container: **4/4 passed.**
+
+## Security considerations
+
+- **No secret is in the image.** The Dockerfile copies only
+  `pyproject.toml`, `uv.lock`, `README.md` and `app/` — never `.`. Verified:
+  `find / -name .env` inside the running container returns nothing.
+- `.dockerignore` excludes `.env`, `.env.*`, `.git`, caches, `tests/`,
+  `evals/` and local data as defence in depth and to shrink the build context.
+- `.env` is gitignored and untracked. Verified with `git check-ignore`.
+- **Runs as non-root**, uid 10001.
+- `/ready` reports key presence as a **boolean**, never a value — it is a
+  public endpoint.
+- Logs are JSON in production and pass through the two-layer redaction from
+  M0. Verified: a dummy key passed as an env var appears zero times in logs.
+- The M9 controls are untouched by this milestone: SSRF guard, untrusted-
+  content boundary, injection telemetry, citation verification.
+
+## Limitations
+
+- **No live public deployment exists.** Everything Render-related is
+  configuration and instructions.
+- Built and run with **Podman, not Docker**. The Dockerfile is standard, but
+  Docker itself was unavailable here.
+- `HEALTHCHECK` could not be exercised, because Podman's OCI format ignores it.
+- The smoke test deliberately never calls a research endpoint, so **no
+  end-to-end research run has been verified through a deployed HTTP
+  interface.** The pipeline itself is live-verified in M5; the gap is
+  specifically "via a deployed container".
+- SQLite on a single mounted disk means one instance. Horizontal scaling would
+  need `VECTOR_BACKEND=postgres`, which exists in config but is not exercised
+  in a deployment.
+- A research request is a long-lived HTTP request. There is no job queue, so a
+  platform request timeout will cut off a long run.
