@@ -97,7 +97,7 @@ claims.
 | 19 | Agentic orchestration | `app/pipeline/orchestrator.py` | live e2e: 8 stages, 16 verified citations | ✅ M5 |
 | 20 | UNKNOWN / information gaps | `app/pipeline/assess.py`, `app/schemas/report.py` | `tests/integration/test_report_assessment.py` | ✅ M6 |
 | 21 | Evaluation harness | `app/evaluation/` | [`docs/evaluation.md`](docs/evaluation.md) — 7 metrics, committed baseline | ✅ M7 |
-| 22 | MCP tool layer | `app/mcp/server.py` | external client transcript | ⬜ M8 |
+| 22 | MCP tool layer | `app/mcp/server.py` | [`docs/mcp.md`](docs/mcp.md) — 4 tools, 36 protocol tests | ✅ M8 |
 | 23 | Prompt-injection resistance | `app/core/security.py` | injection corpus suite | ⬜ M9 |
 | 24 | Observability | `app/observability/trace.py` | per-stage trace assertions | ⬜ M9 |
 | 25 | Cost & latency measurement | `app/llm/pricing.py`, `app/schemas/runs.py` | `tests/unit/test_pricing.py`; real figures pending M9 | 🟡 M1 |
@@ -116,7 +116,7 @@ claims.
 | M5 | Orchestration | ✅ live-verified end-to-end |
 | M6 | Report + UNKNOWN / information gaps | ✅ offline-verified |
 | M7 | Evaluation | ✅ baseline + improvement cycle |
-| M8 | MCP | ⬜ |
+| M8 | MCP | ✅ 4 tools, no eval regression |
 | M9 | Security / hardening | ⬜ |
 | M10 | Deployment + documentation | ⬜ |
 
