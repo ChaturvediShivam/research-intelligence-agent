@@ -28,6 +28,7 @@ from typing import Any
 
 import structlog
 
+from app.core.security import sanitise_untrusted_label
 from app.schemas.evidence import Citation, source_id_for
 from app.schemas.source import FetchedSource
 
@@ -61,7 +62,10 @@ def build_document_blocks(sources: list[FetchedSource]) -> list[dict[str, Any]]:
                     # alignment the verifier depends on.
                     "data": source.text,
                 },
-                "title": (source.title or source.domain)[:200],
+                # Attacker-controlled: a page sets its own title, and this is
+                # a structural field, not evidence. Sanitised (M9); the `data`
+                # above is not, because the verifier's offsets depend on it.
+                "title": sanitise_untrusted_label(source.title or source.domain),
                 "citations": {"enabled": True},
             }
         )

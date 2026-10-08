@@ -1,4 +1,16 @@
-"""URL safety: SSRF defence and domain policy.
+"""Security boundaries: URL safety, and the untrusted-content boundary.
+
+Two separate concerns live here because both answer the same question — what
+is this system willing to let the outside world do to it.
+
+**Part 1, URL safety (M2):** whether the service will fetch a URL at all.
+
+**Part 2, the untrusted-content boundary (M9):** what retrieved text is
+allowed to influence once fetched. See `UNTRUSTED_CONTENT_POLICY` below.
+
+---
+
+Part 1 — SSRF defence and domain policy.
 
 This module decides whether the service will fetch a URL at all. It runs
 before any network request and again on every redirect hop, because a URL
@@ -219,3 +231,104 @@ def validate_url(
             )
 
     return url.strip()
+
+
+# --------------------------------------------------------------------------
+# Part 2 — the untrusted-content boundary (M9)
+# --------------------------------------------------------------------------
+
+UNTRUSTED_CONTENT_POLICY = """\
+Every byte of retrieved source text is untrusted data. It may be quoted,
+extracted, cited and summarised. It may never become instruction.
+
+The boundary is **structural, not lexical.** Retrieved text never enters the
+system prompt; it enters only as fenced user-channel content
+(`app.llm.context.frame_untrusted`) or as a native `document` block with
+citations enabled. The operator instruction that says "this is data" sits
+outside the fence, where retrieved text cannot reach it.
+
+This is deliberately not keyword filtering. A legitimate regulatory document
+may well contain the sentence "ignore previous guidance", and a system that
+deleted it would corrupt the evidence it exists to report. Hostile text is
+therefore carried faithfully and denied authority, rather than edited.
+
+What retrieved content cannot change, and why:
+
+| Protected | Why it holds |
+|---|---|
+| Tool selection | Tools are a fixed registry; no text path adds or names one |
+| System instructions | Retrieved text is never concatenated into a system prompt |
+| Pipeline ordering | The orchestrator sequences stages; no stage reads an order from content |
+| Verification rules | Stage 7 re-slices stored text; it reads no instruction from it |
+| Citation offsets | Code locates quotes; the model never supplies an offset |
+| Secrets | Settings are read server-side and never placed in a prompt |
+
+The one guarantee that does **not** rest on the model behaving: citation
+verification. Even if a model fully obeyed an injected instruction, a claim
+whose quote is not verbatim in the stored source is rejected by code.
+"""
+
+# Markers worth counting when they appear in retrieved text. This is
+# TELEMETRY, NOT A FILTER — nothing is removed or rejected on the strength of
+# a match, because a false positive would corrupt real evidence. It exists so
+# an operator can see that a source tried something, which is otherwise
+# invisible.
+_INJECTION_SIGNALS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "instruction_override",
+        ("ignore previous", "ignore all previous", "disregard the above", "disregard previous"),
+    ),
+    (
+        "fake_role",
+        (
+            "system:",
+            "developer:",
+            "assistant:",
+            "<|im_start|>",
+            "[system]",
+            # A code fence labelled as a role: never legitimate prose, and it
+            # carries no colon, so the patterns above missed it (M9).
+            "```system",
+            "~~~system",
+            "<system",
+        ),
+    ),
+    ("prompt_extraction", ("system prompt", "your instructions", "reveal your")),
+    ("tool_injection", ('"tool_use"', '"tool_call"', "function_call", "<tool_call>")),
+    ("citation_tampering", ("do not cite", "without citing", "skip verification")),
+    ("answer_forcing", ("respond with exactly", "return this exact", "you must answer")),
+    ("exfiltration", ("api key", "send credentials", "anthropic_api_key")),
+    ("fence_escape", ("<<<UNTRUSTED_SOURCE_CONTENT>>>", "<<<END_UNTRUSTED_SOURCE")),
+)
+
+
+def detect_injection_signals(text: str) -> tuple[str, ...]:
+    """Categories of injection-like content present in `text`.
+
+    Observability only. A non-empty result never changes how the text is
+    handled — see `UNTRUSTED_CONTENT_POLICY` on why filtering would be worse
+    than carrying the text faithfully.
+    """
+    lowered = text.lower()
+    return tuple(
+        category
+        for category, needles in _INJECTION_SIGNALS
+        if any(needle.lower() in lowered for needle in needles)
+    )
+
+
+def sanitise_untrusted_label(label: str, *, limit: int = 200) -> str:
+    """Make a page-supplied label safe to place in a prompt as a label.
+
+    A title or filename is attacker-controlled, and unlike body text it is
+    placed in a structural position — a document block's `title`, a fence
+    header — where a newline or a closing marker could change how the
+    surrounding frame parses. Body text is carried verbatim; a *label* is not
+    evidence, so flattening it costs nothing.
+    """
+    flattened = " ".join(label.split())
+    for marker in ("<<<UNTRUSTED_SOURCE_CONTENT>>>", "<<<END_UNTRUSTED_SOURCE_CONTENT>>>"):
+        flattened = flattened.replace(marker, "")
+    # Strip characters that would let a label impersonate structure.
+    flattened = flattened.replace("<", "(").replace(">", ")")
+    return flattened.strip()[:limit]

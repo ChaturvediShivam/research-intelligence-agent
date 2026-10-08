@@ -190,6 +190,23 @@ class ResearchOrchestrator:
             result.trace.stages.append(outcome.metric)
         return outcome
 
+    def _record_raised_stage(self, result: RunResult, exc: PipelineStageError) -> None:
+        """Mark the stage that raised as FAILED, and the rest as SKIPPED.
+
+        Stages that complete record themselves; a stage that raises never
+        reaches its own `_record` call, which is how a failed stage could
+        otherwise be missing from the trace entirely.
+        """
+        try:
+            stage = Stage(exc.stage)
+        except ValueError:
+            # An unrecognised stage name is not worth guessing at.
+            return
+        if any(outcome.stage is stage for outcome in result.stages):
+            return
+        self._record(result, stage, StageStatus.FAILED, errors=[exc.message])
+        self._skip_remaining(result, stage)
+
     def _skip_remaining(self, result: RunResult, after: Stage) -> None:
         """Mark unreached stages SKIPPED, so a run shows where it stopped.
 
@@ -267,6 +284,10 @@ class ResearchOrchestrator:
         except PipelineStageError as exc:
             result.status = RunStatus.FAILED
             result.error = f"{exc.stage}: {exc.message}"
+            # Record the stage that raised. Without this a stage that threw
+            # left no outcome at all, so the run reported a failure that no
+            # trace could attribute to a stage (M9, F-015).
+            self._record_raised_stage(result, exc)
             logger.warning("run_failed", run_id=run_id, stage=exc.stage)
         except CostCeilingExceededError as exc:
             result.status = RunStatus.FAILED

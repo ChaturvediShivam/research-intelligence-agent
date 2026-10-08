@@ -222,8 +222,17 @@ class TestPlannerFailure:
 
         assert result.status is RunStatus.FAILED
         assert result.error is not None and result.error.startswith("plan:")
-        # No stage after PLAN may have run.
-        assert result.stages == [] or all(s.stage is Stage.PLAN for s in result.stages)
+        # No stage after PLAN may have run. Asserted precisely since M9: the
+        # raising stage is now recorded FAILED and the rest SKIPPED, where
+        # before a raising stage left no outcome at all and this could only
+        # check that nothing unexpected was present.
+        outcomes = {s.stage: s.status for s in result.stages}
+        assert outcomes[Stage.PLAN] is StageStatus.FAILED
+        assert all(
+            status is StageStatus.SKIPPED
+            for stage, status in outcomes.items()
+            if stage is not Stage.PLAN
+        )
         assert result.discovery is None
         assert result.processed is None
         assert llm.create_calls == [], "synthesis must not have been attempted"

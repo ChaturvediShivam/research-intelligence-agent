@@ -479,3 +479,73 @@ report quality.
 **Lesson recorded.** A single before/after pair on a non-deterministic metric
 is not evidence. Measuring the noise floor cost one extra run and converted a
 tempting claim into an honest one.
+
+---
+
+## F-015 · A stage that raised left no trace record at all
+
+**Milestone:** M9
+**Found by:** writing the per-stage trace assertion M9 requires — "exceptions
+do not silently disappear from traces"
+
+**Symptom.** `KeyError: <Stage.PLAN: 'plan'>`. A run whose PLAN stage raised
+reported `status=failed` with a correct `error` string, but its exported trace
+contained **no stage records whatsoever** — not a FAILED one for the stage
+that raised, and not SKIPPED ones for the stages that never ran.
+
+**Cause.** Each stage records its own outcome *after* completing. A stage that
+raises therefore never reaches its own `_record` call, and the exception
+unwinds to the handler in `run()`, which set `status` and `error` but recorded
+nothing. The run knew what failed; the trace could not say.
+
+This had been true since M5 and was invisible because nothing had asked the
+trace to attribute a failure to a stage before. The log line
+(`run_failed stage=plan`) carried the information, so an operator reading logs
+would have been fine — but an operator reading the trace would have seen a
+failed run with no failed stage.
+
+**Fix.** `_record_raised_stage` in the `PipelineStageError` handler — the one
+place that already knows which stage raised, from `exc.stage`. It records that
+stage FAILED with the message, then marks the rest SKIPPED. It is deliberately
+narrow: it declines to guess when the stage name is unrecognised, and it will
+not overwrite an outcome the stage already recorded.
+
+**Regression test.** `test_an_exception_does_not_vanish_from_the_trace` and
+`test_stages_that_never_ran_are_still_listed`.
+
+**One existing test conflicted**, and the resolution is worth recording
+because "a test went red" is where corners get cut. `TestPlannerFailure`
+asserted `result.stages == [] or all(s.stage is Stage.PLAN ...)` — written
+when a raising stage produced nothing, so it could only check that nothing
+*unexpected* was present. Its stated intent, "no stage after PLAN may have
+run", is still satisfied: SKIPPED records that they did not run. The
+assertion was therefore **tightened**, not relaxed — it now requires PLAN to
+be FAILED and every other stage to be SKIPPED, which is strictly stronger
+than what it checked before.
+
+**Lesson recorded.** The gap existed because success and failure were
+instrumented asymmetrically: the happy path recorded itself, the error path
+recorded only at the top. Worth checking the same asymmetry anywhere else
+observability is bolted on after the fact.
+
+---
+
+## F-016 · A code fence labelled as a role escaped injection telemetry
+
+**Milestone:** M9
+
+**Symptom.** Corpus case INJ07 — a ```` ```system ```` block — produced no
+injection signal, while every other marker-bearing case did.
+
+**Cause.** The `fake_role` patterns all required a colon (`system:`,
+`developer:`). A fenced block labels its role without one.
+
+**Fix.** Added ```` ```system ````, `~~~system` and `<system` to the pattern
+set. Still telemetry, not a filter.
+
+**Worth noting:** writing this corpus also established that **2 of 15 cases
+are undetectable by design** — INJ10 (social engineering) and INJ14
+(pseudo-configuration) contain no marker word at all. Rather than stretch the
+word list until it caught them and started flagging real documents, both are
+documented as the reason the defence has to be structural. The test asserts
+the exact set `{INJ10, INJ14}`, so the limitation cannot drift unnoticed.

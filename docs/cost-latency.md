@@ -1,7 +1,6 @@
 # Cost and latency
 
-**First real measurements below, from M1 live verification on 2026-10-08.**
-Full-pipeline figures arrive with M9; these cover stage 1 only.
+**Real measurements from live runs. Full-pipeline figures added in M9.**
 
 ## What is measured
 
@@ -14,7 +13,27 @@ Per stage, per run, recorded in `RunTrace`:
   cost $0.20/MTok against $4.00/MTok uncached on Claude Opus 5.5, and a single
   blended number would hide the one figure worth watching
 
-Cost is derived from `app/llm/pricing.py`, not estimated.
+## Measured, derived, unavailable
+
+M9 tags every number in an exported trace with its provenance
+(`app.observability.trace.Measurement`), because the distinction is easy to
+blur and matters:
+
+| Tag | Meaning | Examples |
+|---|---|---|
+| `measured` | The API or the clock reported it | token counts from `response.usage`; stage and run duration from `perf_counter` |
+| `derived` | Computed here from measured inputs | **cost** — the API returns tokens, not dollars, so cost is `tokens x app/llm/pricing.py` |
+| `unavailable` | Not exposed; named rather than defaulted to zero | tokens for a stage that made no model call |
+
+Cost is **derived, not measured.** It is exact for the price table in
+`app/llm/pricing.py` and becomes wrong the day prices change — which is why
+it is not called a measurement. An earlier version of this document said
+"derived ... not estimated", which blurred the same distinction from the other
+side; the table above is the precise statement.
+
+`unavailable` exists because a zero that means "we never saw it" and a zero
+that means "it was zero" are different facts. A stage like RETRIEVE makes no
+model call, so its token count is unavailable, not 0.
 
 ## Price table in use
 
@@ -129,3 +148,64 @@ driving claims costs upward?"*
   stable prefix to cache. The figure is worth watching rather than fixing.
 - **Zero-cost stages are genuinely zero.** process, retrieve, validate and
   report make no model call, and report $0.00 rather than an estimate.
+
+
+---
+
+## Full pipeline — M5 live end-to-end run
+
+Artifact: `evals/results/live_e2e_run_5d9d076f1c0d49be.json`.
+Question: *"How concentrated is the UK pet insurance market, and what is
+driving claims costs upward?"* — 6 sub-questions, 5 sources discovered,
+4 fetched, 1 failed, 12 chunks indexed, 26 evidence items,
+**16 verified citations, 0 rejected**.
+
+| Stage | Status | Calls | Cost (derived) | Latency (measured) |
+|---|---|---|---|---|
+| PLAN | passed | 1 | $0.071341 | 38,805 ms |
+| DISCOVER | passed | 2 | $0.037060 | 44,990 ms |
+| PROCESS | partial | 0 | — | 3,206 ms |
+| RETRIEVE | passed | 0 | — | 1,023 ms |
+| EXTRACT | passed | 24 | $0.054884 | 15,020 ms |
+| VALIDATE | passed | 0 | — | 0 ms |
+| SYNTHESISE | partial | 5 | $0.173460 | 59,722 ms |
+| REPORT | passed | 0 | — | 1 ms |
+| **Total** | completed | **32** | **$0.336745** | **162,767 ms** |
+
+Wall clock 162,774 ms against 162,767 ms of summed stage time — the 7 ms
+difference is orchestration overhead.
+
+Where the money goes: SYNTHESISE is 52% of cost on 5 calls, because each call
+attaches full source documents for native citations. EXTRACT is 24 calls for
+16% of cost, because it runs on Haiku per chunk. PROCESS, RETRIEVE, VALIDATE
+and REPORT make no model call at all — the four deterministic stages are free,
+which is a direct consequence of the design putting verification in code.
+
+**Limitation of this artifact:** it persists per-stage cost and latency but
+**not** the token breakdown or model name per stage — those were measured
+during the run and dropped by the artifact writer. `RunTraceRecord`
+(M9) carries them, so a future run exports the full picture; this older
+artifact cannot be back-filled, and the figures above are reproduced as
+recorded rather than reconstructed.
+
+## Measurement path, live-verified
+
+Artifact: `evals/results/live_measurement_m9.json`. One Haiku call, run to
+prove the numbers originate at the API rather than in a fixture — which no
+offline test can establish, since a fake's tokens are whatever it returned.
+
+| Quantity | Value | Provenance |
+|---|---|---|
+| Model | `claude-haiku-4-5` | — |
+| Input tokens | 220 | measured (`response.usage`) |
+| Output tokens | 9 | measured |
+| Cache read / write | 0 / 0 | measured |
+| Latency | 1,779 ms | measured (`perf_counter`) |
+| Cost | $0.000265 | derived (tokens x price table) |
+
+The test also recomputes cost from the measured usage and asserts it equals
+the reported figure, which is what "derived" has to mean to be checkable.
+
+**Cost of this verification: $0.000265, one call.** The measurement path does
+not vary by stage — `LLMClient` reads usage and prices it identically wherever
+it is called — so proving it once on the cheapest model proves it everywhere.
