@@ -159,6 +159,8 @@ class TestHappyPath:
             Stage.VALIDATE,
             Stage.SYNTHESISE,
             Stage.REPORT,
+            # M6: stage 8 assembles the report and names the gaps.
+            Stage.ASSESS,
         ]
 
     @respx.mock

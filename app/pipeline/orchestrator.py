@@ -33,6 +33,7 @@ import structlog
 from app.core.config import Settings
 from app.core.errors import CostCeilingExceededError, PipelineStageError
 from app.llm.client import LLMClient
+from app.pipeline.assess import run_assess_stage
 from app.pipeline.discover import DiscoveryResult, run_discover_stage
 from app.pipeline.extract import ExtractionResult, run_extract_stage
 from app.pipeline.plan import run_plan_stage
@@ -51,6 +52,7 @@ from app.schemas.evidence import (
     SourceRef,
     source_id_for,
 )
+from app.schemas.report import ResearchReport
 from app.schemas.research import ResearchPlan, ResearchRequest, RunStatus, new_run_id
 from app.schemas.runs import RunTrace, Stage, StageMetric, StageOutcome, StageStatus
 from app.schemas.source import Chunk, FetchedSource
@@ -79,6 +81,7 @@ class RunResult:
     evidence_validation: ValidationResult | None = None
     synthesis: SynthesisResult | None = None
     claim_validation: ValidationResult | None = None
+    report: ResearchReport | None = None
 
     # Provenance registry: the canonical source identity and text every
     # citation is verified against.
@@ -201,6 +204,7 @@ class ResearchOrchestrator:
             Stage.EXTRACT,
             Stage.VALIDATE,
             Stage.SYNTHESISE,
+            Stage.REPORT,
         ]
         reached = order.index(after)
         recorded = {s.stage for s in result.stages}
@@ -273,7 +277,33 @@ class ResearchOrchestrator:
             result.error = "Internal pipeline error."
             logger.exception("run_error", run_id=run_id, exc_type=type(exc).__name__)
 
-        result.trace.finished_at = result.trace.finished_at or None
+        # Stage 8 runs even when the pipeline stopped early. A failed run
+        # still has information gaps, and a reader needs to know why it
+        # produced nothing rather than receiving silence.
+        if result.plan is not None and result.report is None:
+            try:
+                report, assess_metric = run_assess_stage(result)
+                result.report = report
+                self._record(
+                    result,
+                    Stage.ASSESS,
+                    StageStatus.PASSED,
+                    metric=assess_metric,
+                    inputs=len(result.plan.sub_questions),
+                    outputs=len(report.sub_questions),
+                    warnings=[
+                        f"gap [{g.sub_question_id}]: {g.cause.value}"
+                        for g in report.information_gaps
+                    ],
+                )
+            except Exception as exc:  # noqa: BLE001 - assessment must not mask a run
+                logger.exception("assess_failed", run_id=run_id)
+                self._record(
+                    result,
+                    Stage.ASSESS,
+                    StageStatus.FAILED,
+                    errors=[f"{type(exc).__name__}: {exc}"[:200]],
+                )
         logger.info(
             "run_complete",
             run_id=run_id,

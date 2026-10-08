@@ -74,13 +74,16 @@ class FakeSourceProvider:
 # --------------------------------------------------------------------------
 
 
+_QUESTIONS = {
+    "SQ1": "What were claims acceptance rates for home emergency cover?",
+    "SQ2": "What was UK pet insurance gross written premium?",
+    "SQ3": "Which insurers held the largest market shares?",
+}
+
+
 def make_plan(sub_question_ids: tuple[str, ...] = ("SQ1", "SQ2")) -> ResearchPlan:
     """A valid plan, built through the real schema so validators apply."""
-    questions = {
-        "SQ1": "What were claims acceptance rates for home emergency cover?",
-        "SQ2": "What was UK pet insurance gross written premium?",
-        "SQ3": "Which insurers held the largest market shares?",
-    }
+    questions = _QUESTIONS
     return ResearchPlan(
         restated_question=(
             "Claims acceptance rates and gross written premium for UK "
@@ -211,6 +214,11 @@ class ScriptedLLM:
         sub_question_ids: list[str] | None = None,
         discovery_turns: int = 2,
         extraction_enabled: bool = True,
+        # Sub-questions for which the extractor finds nothing. Needed to
+        # exercise the UNKNOWN path: retrieval returns chunks for every
+        # sub-question, so without this every one gets evidence and no gap
+        # is ever produced.
+        no_evidence_for: set[str] | None = None,
         synthesis_enabled: bool = True,
         plan_error: Exception | None = None,
         extract_error: Exception | None = None,
@@ -221,6 +229,7 @@ class ScriptedLLM:
         self._sub_question_ids = sub_question_ids or [sq.id for sq in self._plan.ordered()]
         self._discovery_turns = discovery_turns
         self._extraction_enabled = extraction_enabled
+        self._no_evidence_for = no_evidence_for or set()
         self._synthesis_enabled = synthesis_enabled
         self._plan_error = plan_error
         self._extract_error = extract_error
@@ -251,7 +260,14 @@ class ScriptedLLM:
                 raise self._extract_error
             if not self._extraction_enabled:
                 return FakeParseResponse(parsed_output=ChunkExtraction(items=[]))
-            chunk_text = _chunk_text_from(kwargs["messages"][0]["content"])
+            user_content = kwargs["messages"][0]["content"]
+            # The stage puts the sub-question text at the top of the prompt;
+            # match it back to an id so a named sub-question can be starved.
+            if any(
+                _QUESTIONS.get(sqid, "\u0000") in user_content for sqid in self._no_evidence_for
+            ):
+                return FakeParseResponse(parsed_output=ChunkExtraction(items=[]))
+            chunk_text = _chunk_text_from(user_content)
             sentence = _first_sentence(chunk_text)
             if sentence is None:
                 return FakeParseResponse(parsed_output=ChunkExtraction(items=[]))
