@@ -81,9 +81,9 @@ claims.
 | 3 | Configuration & secret handling | `app/core/config.py` | `tests/unit/test_config.py` | ✅ M0 |
 | 4 | Error taxonomy, no internal leakage | `app/core/errors.py` | `tests/unit/test_errors.py` | ✅ M0 |
 | 5 | Secret redaction in logs | `app/core/logging.py` | `tests/security/test_log_redaction.py` | ✅ M0 |
-| 6 | LLM API integration | `app/llm/client.py` | retry/error tests | ⬜ M1 |
-| 7 | Structured outputs | `app/pipeline/plan.py`, `extract.py` | schema-validation tests | ⬜ M1 |
-| 8 | Prompt / context engineering | `app/llm/context.py`, `app/llm/prompts/` | `docs/prompt-engineering.md` eval deltas | ⬜ M1→M7 |
+| 6 | LLM API integration | `app/llm/client.py` | `tests/unit/test_llm_client.py` | ✅ M1 |
+| 7 | Structured outputs | `app/pipeline/plan.py` | `tests/unit/test_plan_stage.py` | ✅ M1 (plan); extract in M4 |
+| 8 | Prompt / context engineering | `app/llm/context.py`, `app/llm/prompts/plan.v1.md` | `tests/unit/test_context.py`; eval deltas pending M7 | 🟡 M1 |
 | 9 | Source discovery | `app/tools/search.py` | integration tests | ⬜ M2 |
 | 10 | SSRF defence | `app/core/security.py` | `tests/security/` | ⬜ M2 |
 | 11 | RAG / chunking | `app/retrieval/chunking.py` | unit tests | ⬜ M3 |
@@ -100,7 +100,7 @@ claims.
 | 22 | MCP tool layer | `app/mcp/server.py` | external client transcript | ⬜ M8 |
 | 23 | Prompt-injection resistance | `app/core/security.py` | injection corpus suite | ⬜ M9 |
 | 24 | Observability | `app/observability/trace.py` | per-stage trace assertions | ⬜ M9 |
-| 25 | Cost & latency measurement | `app/llm/pricing.py` | `docs/cost-latency.md` | ⬜ M9 |
+| 25 | Cost & latency measurement | `app/llm/pricing.py`, `app/schemas/runs.py` | `tests/unit/test_pricing.py`; real figures pending M9 | 🟡 M1 |
 | 26 | Testing & CI | `tests/`, `.github/workflows/ci.yml` | CI green | ✅ M0 |
 | 27 | Deployment | `Dockerfile`, Render | live URL | ⬜ M10 |
 
@@ -109,7 +109,7 @@ claims.
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 | Foundation: structure, config, logging, errors, CI, ADRs | ✅ |
-| M1 | API + research planning | ⬜ |
+| M1 | API + research planning | 🟡 code + tests pass; **live verification blocked on API key** |
 | M2 | Source ingestion | ⬜ |
 | M3 | Retrieval + retrieval evaluation | ⬜ |
 | M4 | Evidence + citation verification | ⬜ |

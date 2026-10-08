@@ -1,8 +1,8 @@
 """FastAPI application factory.
 
-A factory rather than a module-level `app` singleton so that tests can build
-an instance with overridden settings, and so import of this module has no side
-effects beyond defining functions.
+A factory rather than a module-level singleton so tests can build an instance
+with overridden settings, and so importing this module has no side effects
+beyond defining functions.
 """
 
 from __future__ import annotations
@@ -13,26 +13,55 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 
-from app.api import routes_health
+from app.api import routes_health, routes_research
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
+from app.llm.client import LLMClient
+from app.llm.pricing import is_priced
+from app.storage.runs import RunRepository
 
 logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Startup/shutdown. Logs the resolved configuration without secrets."""
+    """Startup and shutdown. Logs resolved configuration without secrets."""
     settings: Settings = app.state.settings
+
+    # Fail loudly at startup if a configured model has no price entry. The
+    # alternative is reporting that model's cost as zero for the life of the
+    # process, which would silently corrupt every figure the project publishes.
+    unpriced = [
+        model
+        for model in (
+            settings.planning_model,
+            settings.synthesis_model,
+            settings.extraction_model,
+        )
+        if not is_priced(model)
+    ]
+    if unpriced:
+        raise RuntimeError(
+            f"No price entry for configured model(s): {sorted(set(unpriced))}. "
+            "Add them to app/llm/pricing.py — an unpriced model would report "
+            "zero cost."
+        )
+
     logger.info(
         "application_start",
         environment=settings.environment,
         vector_backend=settings.vector_backend,
         anthropic_key_configured=settings.anthropic_api_key is not None,
+        planning_model=settings.planning_model,
+        extraction_model=settings.extraction_model,
     )
-    yield
-    logger.info("application_stop")
+    try:
+        yield
+    finally:
+        repo: RunRepository = app.state.run_repository
+        repo.close()
+        logger.info("application_stop")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -50,8 +79,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = resolved
+    app.state.run_repository = RunRepository(resolved.database_path)
+    app.state.llm_client = LLMClient(resolved)
+
     register_exception_handlers(app)
     app.include_router(routes_health.router)
+    app.include_router(routes_research.router)
     return app
 
 
