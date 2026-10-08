@@ -400,7 +400,7 @@ class ResearchOrchestrator:
         result.extraction = extraction
         extract_status = (
             StageStatus.PASSED
-            if extraction.items and not extraction.unlocatable
+            if extraction.items and not extraction.unlocatable and not extraction.failures
             else StageStatus.PARTIAL
             if extraction.items
             else StageStatus.FAILED
@@ -412,7 +412,12 @@ class ResearchOrchestrator:
             metric=metric,
             inputs=retrieved_total,
             outputs=len(extraction.items),
-            warnings=[f"unlocatable quote: {q[:80]}" for q, _ in extraction.unlocatable],
+            warnings=[
+                *(f"unlocatable quote: {q[:80]}" for q, _ in extraction.unlocatable),
+                # A chunk whose extraction call failed is a warning, not a
+                # fatal error: the run continues on the chunks that worked.
+                *(f"chunk extraction failed: {f[:80]}" for f in extraction.failures),
+            ],
         )
         if not extraction.items:
             result.status = RunStatus.FAILED

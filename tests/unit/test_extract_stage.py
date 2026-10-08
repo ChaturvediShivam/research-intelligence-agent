@@ -355,8 +355,12 @@ class TestDraftSchema:
             verbatim_quote="a sufficiently long verbatim quote",
             grade=EvidenceGrade.TALK,
         )
+        # The cap moved from 3 to 8 (F-011): a dense chunk legitimately
+        # yields more than three findings, and rejecting the response lost
+        # them all.
+        assert len(ChunkExtraction(items=[draft] * 4).items) == 4
         with pytest.raises(ValidationError):
-            ChunkExtraction(items=[draft] * 4)
+            ChunkExtraction(items=[draft] * 9)
 
     def test_grade_must_be_one_of_the_three(self) -> None:
         from pydantic import ValidationError
@@ -367,3 +371,51 @@ class TestDraftSchema:
                 verbatim_quote="a sufficiently long verbatim quote",
                 grade="opinion",  # type: ignore[arg-type]
             )
+
+
+class TestPerChunkResilience:
+    """F-011: one malformed response must not destroy the whole stage.
+
+    The live run failed because Haiku returned 4 items against a max_length
+    of 3; Pydantic rejected that response, the exception propagated out of
+    asyncio.gather, and the entire run died on one chunk.
+    """
+
+    async def test_one_failing_chunk_does_not_lose_the_others(self) -> None:
+        good = FakeResponse(
+            parsed_output=ChunkExtraction(
+                items=[
+                    EvidenceDraft(
+                        statement="Acceptance averaged 61%.",
+                        verbatim_quote="averaged 61% across reporting firms",
+                        grade=EvidenceGrade.BEHAVIOR,
+                    )
+                ]
+            )
+        )
+        fake = FakeAnthropic([RuntimeError("malformed response"), good])
+        result, metric = await run_extract_stage(
+            {"SQ1": [CHUNK, CHUNK.model_copy(update={"index": 4})]},
+            {"SQ1": "q"},
+            client=LLMClient(_settings(), client=fake),
+            settings=_settings(),
+        )
+
+        assert len(result.items) == 1, "the healthy chunk's evidence survived"
+        assert len(result.failures) == 1
+        assert result.chunks_attempted == 2
+        assert result.chunk_failure_rate == pytest.approx(0.5)
+        assert metric.calls == 1
+
+    async def test_all_chunks_failing_is_fatal_and_says_so(self) -> None:
+        """An empty result must not look like 'no evidence found'."""
+        fake = FakeAnthropic([RuntimeError("down"), RuntimeError("down")])
+        with pytest.raises(PipelineStageError) as info:
+            await run_extract_stage(
+                {"SQ1": [CHUNK, CHUNK.model_copy(update={"index": 4})]},
+                {"SQ1": "q"},
+                client=LLMClient(_settings(), client=fake),
+                settings=_settings(),
+            )
+        assert info.value.stage == Stage.EXTRACT.value
+        assert "all 2 chunks" in info.value.message

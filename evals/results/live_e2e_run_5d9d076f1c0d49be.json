@@ -1,0 +1,161 @@
+{
+  "sources": [
+    {
+      "credibility": "unvetted",
+      "domain": "insurancebusinessmag.com",
+      "url": "https://www.insurancebusinessmag.com/uk/news/breaking-news/uk-pet-insurance-market-expected-to-more-than-double-by-2030-539832.aspx"
+    },
+    {
+      "credibility": "unvetted",
+      "domain": "globaldata.com",
+      "url": "https://www.globaldata.com/store/report/uk-pet-insurance-market-analysis/"
+    },
+    {
+      "credibility": "unvetted",
+      "domain": "insurancebusinessmag.com",
+      "url": "https://www.insurancebusinessmag.com/uk/news/breaking-news/pet-insurance-claims-exceed-1-billion-market-for-the-third-consecutive-year--abi-536999.aspx"
+    },
+    {
+      "credibility": "unvetted",
+      "domain": "ibisworld.com",
+      "url": "https://www.ibisworld.com/united-kingdom/industry/pet-insurance/5085/"
+    }
+  ],
+  "stages": [
+    {
+      "calls": 1,
+      "cost_usd": 0.071341,
+      "duration_ms": 38805,
+      "errors": [],
+      "inputs": 1,
+      "outputs": 6,
+      "stage": "plan",
+      "status": "passed",
+      "warnings": []
+    },
+    {
+      "calls": 2,
+      "cost_usd": 0.03706,
+      "duration_ms": 44990,
+      "errors": [],
+      "inputs": 6,
+      "outputs": 5,
+      "stage": "discover",
+      "status": "passed",
+      "warnings": []
+    },
+    {
+      "calls": 0,
+      "cost_usd": 0.0,
+      "duration_ms": 3206,
+      "errors": [],
+      "inputs": 5,
+      "outputs": 4,
+      "stage": "process",
+      "status": "partial",
+      "warnings": [
+        "https://store.mintel.com/report/uk-pet-insurance-market-report-2024: upstream_error"
+      ]
+    },
+    {
+      "calls": 0,
+      "cost_usd": 0.0,
+      "duration_ms": 1023,
+      "errors": [],
+      "inputs": 12,
+      "outputs": 24,
+      "stage": "retrieve",
+      "status": "passed",
+      "warnings": []
+    },
+    {
+      "calls": 24,
+      "cost_usd": 0.054884,
+      "duration_ms": 15020,
+      "errors": [],
+      "inputs": 24,
+      "outputs": 26,
+      "stage": "extract",
+      "status": "passed",
+      "warnings": []
+    },
+    {
+      "calls": 0,
+      "cost_usd": 0.0,
+      "duration_ms": 0,
+      "errors": [],
+      "inputs": 26,
+      "outputs": 26,
+      "stage": "validate",
+      "status": "passed",
+      "warnings": []
+    },
+    {
+      "calls": 5,
+      "cost_usd": 0.17346,
+      "duration_ms": 59722,
+      "errors": [],
+      "inputs": 26,
+      "outputs": 30,
+      "stage": "synthesise",
+      "status": "partial",
+      "warnings": [
+        "unanswered: SQ5"
+      ]
+    },
+    {
+      "calls": 0,
+      "cost_usd": 0.0,
+      "duration_ms": 1,
+      "errors": [],
+      "inputs": 30,
+      "outputs": 16,
+      "stage": "report",
+      "status": "passed",
+      "warnings": []
+    }
+  ],
+  "summary": {
+    "chunks_indexed": 12,
+    "chunks_retrieved": 24,
+    "citations_rejected": 0,
+    "citations_verified": 16,
+    "claims": 30,
+    "claims_supported": 16,
+    "claims_unknown": 14,
+    "cost_by_stage": {
+      "discover": 0.03706,
+      "extract": 0.054884,
+      "plan": 0.071341,
+      "process": 0.0,
+      "retrieve": 0.0,
+      "synthesise": 0.17346,
+      "validate": 0.0
+    },
+    "evidence_items": 26,
+    "evidence_unlocatable": 0,
+    "evidence_verified": 26,
+    "plan_sub_questions": 6,
+    "queries_issued": 1,
+    "question": "How concentrated is the UK pet insurance market, and what is driving claims costs upward?",
+    "run_id": "run_5d9d076f1c0d49be",
+    "sources_discovered": 5,
+    "sources_failed": 1,
+    "sources_fetched": 4,
+    "stages": {
+      "discover": "passed",
+      "extract": "passed",
+      "plan": "passed",
+      "process": "partial",
+      "report": "passed",
+      "retrieve": "passed",
+      "synthesise": "partial",
+      "validate": "passed"
+    },
+    "status": "completed",
+    "total_cost_usd": 0.336745,
+    "total_duration_ms": 162767,
+    "total_llm_calls": 32
+  },
+  "wall_clock_ms": 162774
+}

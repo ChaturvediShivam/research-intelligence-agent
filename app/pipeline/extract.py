@@ -82,7 +82,11 @@ class ChunkExtraction(BaseModel):
 
     items: list[EvidenceDraft] = Field(
         default_factory=list,
-        max_length=3,
+        # 3 was a guess, and a chunk dense with figures legitimately yields
+        # more: the first live run returned 4 and the whole response was
+        # rejected. Bounded still, but no longer tighter than a good answer.
+        # See docs/failure-analysis.md F-011.
+        max_length=8,
         description=(
             "Zero or more evidence items. Zero is correct and common: most "
             "passages contain no evidence for a given sub-question."
@@ -99,11 +103,22 @@ class ExtractionResult:
     # because a rising rate here means the extractor is paraphrasing, which is
     # a prompt problem worth seeing rather than a silently smaller result.
     unlocatable: list[tuple[str, str]] = field(default_factory=list)
+    # Chunks whose extraction call failed outright. Recorded rather than
+    # raised: one malformed response out of dozens of chunks should cost that
+    # chunk's evidence, not the whole run (F-011).
+    failures: list[str] = field(default_factory=list)
 
     @property
     def unlocatable_rate(self) -> float:
         total = len(self.items) + len(self.unlocatable)
         return len(self.unlocatable) / total if total else 0.0
+
+    @property
+    def chunk_failure_rate(self) -> float:
+        total = self.chunks_attempted
+        return len(self.failures) / total if total else 0.0
+
+    chunks_attempted: int = 0
 
 
 def _flexible_pattern(quote: str) -> re.Pattern[str]:
@@ -279,19 +294,33 @@ async def run_extract_stage(
         )
         return result, metric
 
-    try:
-        outcomes = await asyncio.gather(*tasks)
-    except Exception as exc:
-        raise PipelineStageError(
-            Stage.EXTRACT.value, f"Evidence extraction failed: {exc}", cause=exc
-        ) from exc
+    # return_exceptions so one bad chunk does not cancel the others. A
+    # malformed response, a rate limit that outlived its retries, or a schema
+    # rejection costs that chunk's evidence and nothing more.
+    outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+    result.chunks_attempted = len(tasks)
 
-    for items, unlocatable, call_usage, call_cost in outcomes:
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            result.failures.append(f"{type(outcome).__name__}: {outcome}"[:300])
+            logger.warning("extraction_chunk_failed", error_type=type(outcome).__name__)
+            continue
+        items, unlocatable, call_usage, call_cost = outcome
         result.items.extend(items)
         result.unlocatable.extend(unlocatable)
         usage = usage + call_usage
         cost += call_cost
         calls += 1
+
+    # Only a total failure is fatal: if no chunk could be processed at all,
+    # the stage has produced nothing and must say so rather than returning an
+    # empty result that looks like "no evidence found".
+    if tasks and calls == 0:
+        raise PipelineStageError(
+            Stage.EXTRACT.value,
+            f"Evidence extraction failed for all {len(tasks)} chunks. "
+            f"First failure: {result.failures[0] if result.failures else 'unknown'}",
+        )
 
     metric = StageMetric(
         stage=Stage.EXTRACT,
@@ -309,6 +338,7 @@ async def run_extract_stage(
         evidence_items=len(result.items),
         unlocatable=len(result.unlocatable),
         unlocatable_rate=round(result.unlocatable_rate, 3),
+        chunk_failures=len(result.failures),
         cost_usd=metric.cost_usd,
         duration_ms=metric.duration_ms,
     )

@@ -319,3 +319,51 @@ client and the stage, including one asserting that pointing
 **Lesson recorded.** "Always set X explicitly" is a rule about intent, not
 about the wire format. Per-model request capability belongs in data next to
 the other per-model facts, not in a convention each call site re-applies.
+
+---
+
+## F-011 · One rich chunk killed the whole run
+
+**Milestone:** M5 (live end-to-end verification)
+**Found by:** the first live end-to-end run
+
+**Symptom.** PLAN passed, DISCOVER passed, PROCESS partial, RETRIEVE passed,
+then the run died:
+
+    extract: Evidence extraction failed: 1 validation error for ChunkExtraction
+    items: List should have at most 3 items after validation, not 4
+
+**Cause, in two layers.**
+
+The surface cause is another guessed bound, the same shape as F-004.
+`ChunkExtraction.items` carried `max_length=3`. A passage dense with figures
+legitimately yields more, Haiku returned four, and Pydantic rejected the
+response — losing all four findings. The constrained decoder did not enforce
+the `maxItems` in the schema, so the model was never prevented from exceeding
+it.
+
+The deeper cause is the one that mattered: `run_extract_stage` gathered its
+per-chunk tasks with a bare `asyncio.gather`, so **one malformed response out
+of twenty-four aborted the entire research run**. The architecture is explicit
+that a source-level failure must not end a run; extraction had no equivalent
+protection, and nothing before M5 ran enough chunks concurrently for it to
+show.
+
+**Fix, both layers.**
+
+- Cap raised 3 → 8. Bounded still, but no longer tighter than a good answer.
+- `asyncio.gather(..., return_exceptions=True)`. A failing chunk is recorded
+  in `ExtractionResult.failures`, costs that chunk's evidence, and nothing
+  more. The stage only raises when **every** chunk failed — an empty result
+  must not be mistaken for "no evidence found".
+- The orchestrator surfaces chunk failures as stage warnings, so the run
+  reports PARTIAL rather than hiding them.
+
+**Regression tests.** One failing chunk among two leaves the healthy chunk's
+evidence intact with `chunk_failure_rate == 0.5`; all chunks failing raises
+with "all 2 chunks" in the message; the cap accepts 4 and still rejects 9.
+
+**Lesson recorded.** Fan-out needs a failure policy decided deliberately, not
+inherited from `gather`'s default. Every other fan-out in this project
+(`run_process_stage`) already used `return_exceptions=True`; extraction was
+written later and did not, and no offline test ran enough chunks to notice.

@@ -93,8 +93,8 @@ claims.
 | 15 | Evidence extraction | `app/pipeline/extract.py` | `tests/unit/test_extract_stage.py`; live: 0% unlocatable | ✅ M4 |
 | 16 | **Citation verification** | `app/pipeline/validate.py`, `app/llm/citations.py` | **[`tests/security/test_citation_verification.py`](tests/security/test_citation_verification.py)** — fabricated citation caught | ✅ M4 |
 | 17 | Credibility + corroboration | `app/pipeline/validate.py` | `tests/security/test_citation_verification.py` | ✅ M4 |
-| 18 | Tool / function calling | `app/tools/registry.py` | `strict: true` schema tests | ⬜ M5 |
-| 19 | Agentic orchestration | `app/pipeline/orchestrator.py` | stage tests + ADR-005 | ⬜ M5 |
+| 18 | Tool / function calling | `app/pipeline/discover.py` (Tool Runner over `SourceProvider`) | `tests/integration/test_orchestration.py` | ✅ M5 |
+| 19 | Agentic orchestration | `app/pipeline/orchestrator.py` | live e2e: 8 stages, 16 verified citations | ✅ M5 |
 | 20 | UNKNOWN / information gaps | `app/pipeline/assess.py` | thin-source test | ⬜ M6 |
 | 21 | Evaluation harness | `app/evaluation/` | committed baseline | ⬜ M7 |
 | 22 | MCP tool layer | `app/mcp/server.py` | external client transcript | ⬜ M8 |
@@ -113,7 +113,7 @@ claims.
 | M2 | Source ingestion | ✅ live-verified |
 | M3 | Retrieval + retrieval evaluation | ✅ measured baseline |
 | M4 | Evidence + citation verification | ✅ live-verified |
-| M5 | Orchestration | ⬜ |
+| M5 | Orchestration | ✅ live-verified end-to-end |
 | M6 | Report + UNKNOWN / information gaps | ⬜ |
 | M7 | Evaluation | ⬜ |
 | M8 | MCP | ⬜ |

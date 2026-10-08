@@ -85,3 +85,47 @@ occurred during M1 verification and are **not** included in the total above.
 `MAX_COST_USD_PER_RUN` (default 2.0) aborts a run that would exceed it, raising
 `CostCeilingExceededError`. A truncated run reports as truncated; it never
 returns a partial report that looks complete.
+
+---
+
+## Full pipeline — measured end-to-end run (M5)
+
+`uv run pytest -m live tests/integration/test_live_e2e.py`, 2026-10-08.
+Run id `run_5d9d076f1c0d49be`. Artifact:
+`evals/results/live_e2e_run_5d9d076f1c0d49be.json`.
+
+Question: *"How concentrated is the UK pet insurance market, and what is
+driving claims costs upward?"*
+
+| Stage | Status | Latency | Cost | Calls | In → Out |
+|---|---|---|---|---|---|
+| plan | passed | 38,805 ms | $0.071341 | 1 | 1 → 6 |
+| discover | passed | 44,990 ms | $0.037060 | 2 | 6 → 5 |
+| process | partial | 3,206 ms | $0.000000 | 0 | 5 → 4 |
+| retrieve | passed | 1,023 ms | $0.000000 | 0 | 12 → 24 |
+| extract | passed | 15,020 ms | $0.054884 | 24 | 24 → 26 |
+| validate | passed | 0 ms | $0.000000 | 0 | 26 → 26 |
+| synthesise | partial | 59,722 ms | $0.173460 | 5 | 26 → 30 |
+| report | passed | 1 ms | $0.000000 | 0 | 30 → 16 |
+
+**Total: $0.336745 · 162,774 ms wall clock · 32 LLM calls · 72,953 input /
+10,456 output / 2,326 cache-read tokens.**
+
+### What these numbers say
+
+- **Synthesis dominates cost (51%) and latency (37%).** Five Opus calls, each
+  carrying full source documents as input. This is the stage to attack if cost
+  matters: fewer, larger synthesis calls would trade attribution for spend.
+- **Extraction is cheap despite 24 of the 32 calls.** $0.054884 for 75% of the
+  call volume — ADR-007's routing decision earning its keep, visible in the
+  numbers rather than asserted.
+- **Planning cost $0.071 and took 38.8 seconds** for a single call. High
+  effort on Opus is expensive in wall clock; it is one call per run, so it is
+  cheap per unit of value, but it is a third of the latency before any source
+  is fetched.
+- **Cache hit rate was 3.1%**, far below the 98.3% measured for planning
+  alone in M1. Expected and not a regression: the dominant input is source
+  documents, which differ per run and per sub-question, so there is little
+  stable prefix to cache. The figure is worth watching rather than fixing.
+- **Zero-cost stages are genuinely zero.** process, retrieve, validate and
+  report make no model call, and report $0.00 rather than an estimate.
