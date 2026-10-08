@@ -104,3 +104,54 @@ class RunTrace(BaseModel):
         for stage in self.stages:
             out[stage.stage.value] = round(out.get(stage.stage.value, 0.0) + stage.cost_usd, 6)
         return out
+
+
+class StageStatus(StrEnum):
+    """Per-stage outcome.
+
+    PARTIAL is the one that earns its place: a research run where six of eight
+    sources fetched is a usable result with a recorded gap, and collapsing
+    that into either PASSED or FAILED would lose the distinction a reader
+    needs.
+    """
+
+    PENDING = "pending"
+    RUNNING = "running"
+    PASSED = "passed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    # Not run because a prerequisite failed. Distinct from FAILED: the stage
+    # did not fail, it never started.
+    SKIPPED = "skipped"
+
+    @property
+    def is_usable(self) -> bool:
+        """Whether downstream stages may consume this stage's output."""
+        return self in {StageStatus.PASSED, StageStatus.PARTIAL}
+
+
+class StageOutcome(BaseModel):
+    """What one stage did, for debugging and evaluation.
+
+    Wraps `StageMetric` rather than replacing it: cost and usage accounting
+    stays in one place, and this adds the orchestration-level facts a metric
+    does not carry.
+    """
+
+    stage: Stage
+    status: StageStatus
+    metric: StageMetric | None = None
+    # Counts rather than payloads: a run result is logged and returned over
+    # HTTP, and embedding source text would make it enormous.
+    inputs: int = 0
+    outputs: int = 0
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+    @property
+    def duration_ms(self) -> int:
+        return self.metric.duration_ms if self.metric else 0
+
+    @property
+    def cost_usd(self) -> float:
+        return self.metric.cost_usd if self.metric else 0.0
