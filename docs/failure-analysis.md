@@ -71,3 +71,45 @@ rather than a configuration error.
 
 **Fix.** Strip at the point of use, in `require_anthropic_key()` and
 `require_postgres_dsn()`.
+
+---
+
+## F-004 · A guessed schema bound rejected a correct model response
+
+**Milestone:** M1 (live verification)
+**Found by:** `tests/integration/test_live_plan.py` — the first real API call
+
+**Symptom.** The API returned HTTP 200 and a well-formed plan. The pipeline
+then failed with `PipelineStageError: Planning failed: 1 validation error for
+ResearchPlan — restated_question: String should have at most 600 characters`.
+
+**Cause.** My own schema, not the model. `restated_question` carried
+`max_length=600`, a number I guessed. The prompt instructs the planner to name
+the entity, geographic and sector scope, time period, and unit of measurement
+explicitly — a restatement that does all four runs longer than that. The
+constraint was fighting the instruction. The real response measured **671
+characters**.
+
+**Why no offline test caught it.** Every fixture was one I wrote, and I wrote
+them inside my own bounds. A fake transport can only prove the code handles a
+response shaped the way I imagined. This is precisely the class of defect the
+live milestone gate exists to catch, and the reason M1 was not marked complete
+on the strength of 121 passing offline tests.
+
+**Fix.** Bounds raised from evidence, not from a second guess:
+`restated_question` 600 → 2000; `question` / `rationale` / `answerable_if`
+500 → 1000. `out_of_scope` and `assumptions` had **no per-item cap at all** —
+only a list-length cap — so each item gained a 1000-character bound while I
+was there.
+
+**Also changed.** The live test now prints the observed length of every text
+field, so these bounds stay evidence-backed rather than being re-guessed next
+time. Measured on the passing run: restated_question 671; sub-question text
+158–267; rationale 177–283; answerable_if 246–366. The new limits have
+headroom without being unbounded.
+
+**Cost of the lesson.** Two billable calls whose cost is unmeasurable: the
+validation exception discarded the response before `usage` was read, so the
+spend on a schema-rejected call is not captured. Noted rather than fixed —
+capturing usage on a validation failure is a real gap, logged here as a known
+limitation rather than silently absorbed.

@@ -1,7 +1,7 @@
 # Cost and latency
 
-**No measurements yet. Instrumentation arrives with M5; figures are published
-from real runs in M9.**
+**First real measurements below, from M1 live verification on 2026-10-08.**
+Full-pipeline figures arrive with M9; these cover stage 1 only.
 
 ## What is measured
 
@@ -25,11 +25,42 @@ Cost is derived from `app/llm/pricing.py`, not estimated.
 
 ## Measured results
 
-_Empty until M9._
+### Stage 1 (PLAN) — `claude-opus-5-5`, effort `high`
 
-| Date | SHA | Question class | Sources | Total $ | p50 latency | Cache hit rate |
+Measured 2026-10-08 via `uv run pytest -m live`. Question: *"How concentrated
+is the UK pet insurance market, and which insurers hold the largest shares?"*
+Every figure below is read from a real `response.usage`; none is estimated.
+
+| Call | Input | Output | Cache read | Cache write | Cost | Latency |
 |---|---|---|---|---|---|---|
-| — | — | — | — | — | — | not yet run |
+| 1 | 40 | 2,813 | 2,326 | 0 | $0.056885 | 30,761 ms |
+| 2 | 40 | 2,934 | 2,326 | 0 | $0.059305 | 31,813 ms |
+| 3 | 40 | 2,582 | 2,326 | 0 | $0.052265 | 28,414 ms |
+
+**Total measured: $0.168455 across 3 calls.**
+
+### What these numbers say
+
+- **Cost is dominated by output, not input.** Only 40 input tokens were billed
+  at full rate; output was 2,582–2,934 tokens. At $20/MTok output against
+  $4/MTok input, roughly 97% of the cost of a planning call is the plan itself.
+  Shrinking the prompt would save almost nothing; the lever is plan verbosity.
+- **Caching works and is near-total.** 2,326 of 2,366 input tokens served from
+  cache — a **98.3% hit rate** on the system prefix. Uncached, those 2,326
+  tokens would cost $0.0093 per call instead of $0.00047.
+- **Latency is 28–32 seconds** for one planning call at effort `high`. This is
+  the single strongest justification for the API's return-an-id-and-poll
+  design: a synchronous endpoint would hold a connection for half a minute on
+  stage 1 alone, before any source has been fetched.
+- **Output varied 2,582–2,934 tokens** across three identical requests, so
+  per-run cost is not fixed. Cost ceilings must be enforced against measured
+  spend, which is what `MAX_COST_USD_PER_RUN` does.
+
+### Known measurement gap
+
+A call rejected by schema validation discards its `usage` before it is read,
+so the cost of a failed call is not captured (see F-004). Two such calls
+occurred during M1 verification and are **not** included in the total above.
 
 ## Guardrail
 

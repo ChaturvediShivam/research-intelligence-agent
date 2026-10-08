@@ -94,13 +94,13 @@ class SubQuestion(BaseModel):
     """
 
     id: Annotated[str, Field(min_length=1, max_length=16)]
-    question: Annotated[str, Field(min_length=8, max_length=500)]
-    rationale: Annotated[str, Field(min_length=8, max_length=500)]
+    question: Annotated[str, Field(min_length=8, max_length=1000)]
+    rationale: Annotated[str, Field(min_length=8, max_length=1000)]
     rank: Annotated[int, Field(ge=1, le=20)]
     expected_source_types: Annotated[list[SourceType], Field(min_length=1, max_length=4)]
     # What would make this sub-question answered. Written before any search, so
     # it cannot be retrofitted to whatever the sources happened to say.
-    answerable_if: Annotated[str, Field(min_length=8, max_length=500)]
+    answerable_if: Annotated[str, Field(min_length=8, max_length=1000)]
 
 
 class ResearchPlan(BaseModel):
@@ -114,7 +114,11 @@ class ResearchPlan(BaseModel):
         str,
         Field(
             min_length=8,
-            max_length=600,
+            # 600 was too tight: the prompt asks for entity, scope, period and
+            # unit to be named explicitly, and a thorough restatement exceeded
+            # it on the first live call. Bounded, but no longer fighting the
+            # instruction. See docs/failure-analysis.md F-004.
+            max_length=2000,
             description=(
                 "The research question restated precisely enough to be "
                 "testable. Name the entity, scope, and time period explicitly."
@@ -133,7 +137,7 @@ class ResearchPlan(BaseModel):
         ),
     ]
     out_of_scope: Annotated[
-        list[str],
+        list[Annotated[str, Field(min_length=1, max_length=1000)]],
         Field(
             default_factory=list,
             max_length=6,
@@ -144,7 +148,7 @@ class ResearchPlan(BaseModel):
         ),
     ]
     assumptions: Annotated[
-        list[str],
+        list[Annotated[str, Field(min_length=1, max_length=1000)]],
         Field(
             default_factory=list,
             max_length=6,

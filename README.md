@@ -109,7 +109,7 @@ claims.
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 | Foundation: structure, config, logging, errors, CI, ADRs | ✅ |
-| M1 | API + research planning | 🟡 code + tests pass; **live verification blocked on API key** |
+| M1 | API + research planning | ✅ live-verified |
 | M2 | Source ingestion | ⬜ |
 | M3 | Retrieval + retrieval evaluation | ⬜ |
 | M4 | Evidence + citation verification | ⬜ |

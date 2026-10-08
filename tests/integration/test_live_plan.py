@@ -90,8 +90,21 @@ async def test_real_plan_from_a_real_question() -> None:
     print(
         f"\nLIVE PLAN: {len(plan.sub_questions)} sub-questions · "
         f"{metric.usage.input_tokens} in / {metric.usage.output_tokens} out · "
+        f"cache_read={metric.usage.cache_read_input_tokens} "
+        f"cache_write={metric.usage.cache_creation_input_tokens} · "
         f"${metric.cost_usd:.4f} · {metric.duration_ms}ms"
     )
+    # Observed field lengths, so the schema bounds stay evidence-backed
+    # rather than guessed (F-004 was a guessed bound that was too tight).
+    print(f"  restated_question: {len(plan.restated_question)} chars")
+    for sq in plan.ordered():
+        print(
+            f"  {sq.id} rank={sq.rank} "
+            f"q={len(sq.question)} rationale={len(sq.rationale)} "
+            f"answerable_if={len(sq.answerable_if)} "
+            f"types={[t.value for t in sq.expected_source_types]}"
+        )
+    print(f"  out_of_scope={len(plan.out_of_scope)} assumptions={len(plan.assumptions)}")
 
 
 async def test_prompt_caching_actually_caches() -> None:
