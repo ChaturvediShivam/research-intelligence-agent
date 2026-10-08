@@ -39,6 +39,24 @@ Every figure below is read from a real `response.usage`; none is estimated.
 
 **Total measured: $0.168455 across 3 calls.**
 
+### Stage 5 (EXTRACT) — `claude-haiku-4-5` · Stage 6 citations — `claude-opus-5-5`
+
+Measured 2026-10-08 via `uv run pytest -m live tests/integration/test_live_evidence.py`.
+
+| Call | Model | Input | Output | Cost | Latency |
+|---|---|---|---|---|---|
+| Extraction, 2 chunks | haiku-4-5 | 2,899 | 129 | $0.003544 | 3,600 ms |
+| Extraction, irrelevant question | haiku-4-5 | ~1,400 | ~10 | $0.001513 | — |
+| Cited synthesis, 2 documents | opus-5-5 | 1,360 | 424 | $0.013920 | 4,410 ms |
+
+**Total for the M4 live suite: ~$0.032.**
+
+The routing decision in ADR-007 is visible in these numbers: extraction
+handled 2,899 input tokens for **$0.0035**, where the same volume on Opus
+would have cost roughly 4x more — and extraction is the stage whose call count
+scales with the number of retrieved chunks, so it is the one that had to be
+cheap.
+
 ### What these numbers say
 
 - **Cost is dominated by output, not input.** Only 40 input tokens were billed

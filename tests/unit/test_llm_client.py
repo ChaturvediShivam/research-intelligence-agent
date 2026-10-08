@@ -288,3 +288,59 @@ class TestTransportClosing:
         await client.aclose()
         await client.aclose()
         assert real.is_closed() is True
+
+
+class TestEffortCapability:
+    """F-010: Haiku 4.5 returns 400 for output_config.effort.
+
+    The client decides from the capability table, so no call site has to
+    remember — and these tests pin it against the real model ids.
+    """
+
+    async def test_effort_is_sent_for_a_model_that_supports_it(self) -> None:
+        client, fake = _client([FakeResponse(parsed_output=Answer(value="x"))])
+        await client.structured(
+            model="claude-opus-5-5",
+            output_model=Answer,
+            system="s",
+            user_content="u",
+            effort="high",
+        )
+        assert fake.messages.calls[0]["output_config"] == {"effort": "high"}
+
+    async def test_effort_is_omitted_for_a_model_that_rejects_it(self) -> None:
+        client, fake = _client([FakeResponse(parsed_output=Answer(value="x"))])
+        await client.structured(
+            model="claude-haiku-4-5",
+            output_model=Answer,
+            system="s",
+            user_content="u",
+            effort="low",
+        )
+        # Not present at all — an effort of None would also be a 400.
+        assert "output_config" not in fake.messages.calls[0]
+
+    async def test_the_request_is_otherwise_unchanged(self) -> None:
+        client, fake = _client([FakeResponse(parsed_output=Answer(value="x"))])
+        await client.structured(
+            model="claude-haiku-4-5",
+            output_model=Answer,
+            system="s",
+            user_content="u",
+            effort="low",
+        )
+        call = fake.messages.calls[0]
+        assert call["model"] == "claude-haiku-4-5"
+        assert call["output_format"] is Answer
+        assert call["system"][0]["text"] == "s"
+
+    def test_capability_table_matches_the_real_models(self) -> None:
+        from app.llm.pricing import supports_effort
+
+        assert supports_effort("claude-opus-5-5") is True
+        assert supports_effort("claude-haiku-4-5") is False
+
+    def test_unknown_models_are_assumed_to_support_effort(self) -> None:
+        from app.llm.pricing import supports_effort
+
+        assert supports_effort("claude-some-future-model") is True

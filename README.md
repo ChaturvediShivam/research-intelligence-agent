@@ -90,9 +90,9 @@ claims.
 | 12 | Embeddings | `app/retrieval/embeddings.py` | `tests/integration/test_real_embeddings.py` (real model) | ✅ M3 |
 | 13 | Hybrid retrieval + RRF | `app/retrieval/hybrid.py`, `store.py` | `tests/unit/test_hybrid.py`, `test_store.py` | ✅ M3 |
 | 14 | Retrieval evaluation | `app/evaluation/metrics.py`, `runner.py` | [`docs/evaluation.md`](docs/evaluation.md) — measured baseline | ✅ M3 |
-| 15 | Evidence extraction | `app/pipeline/extract.py` | fixture tests | ⬜ M4 |
-| 16 | **Citation verification** | `app/pipeline/validate.py` | **fabricated-citation test** | ⬜ M4 |
-| 17 | Credibility + corroboration | `app/pipeline/validate.py` | rule tests | ⬜ M4 |
+| 15 | Evidence extraction | `app/pipeline/extract.py` | `tests/unit/test_extract_stage.py`; live: 0% unlocatable | ✅ M4 |
+| 16 | **Citation verification** | `app/pipeline/validate.py`, `app/llm/citations.py` | **[`tests/security/test_citation_verification.py`](tests/security/test_citation_verification.py)** — fabricated citation caught | ✅ M4 |
+| 17 | Credibility + corroboration | `app/pipeline/validate.py` | `tests/security/test_citation_verification.py` | ✅ M4 |
 | 18 | Tool / function calling | `app/tools/registry.py` | `strict: true` schema tests | ⬜ M5 |
 | 19 | Agentic orchestration | `app/pipeline/orchestrator.py` | stage tests + ADR-005 | ⬜ M5 |
 | 20 | UNKNOWN / information gaps | `app/pipeline/assess.py` | thin-source test | ⬜ M6 |
@@ -112,7 +112,7 @@ claims.
 | M1 | API + research planning | ✅ live-verified |
 | M2 | Source ingestion | ✅ live-verified |
 | M3 | Retrieval + retrieval evaluation | ✅ measured baseline |
-| M4 | Evidence + citation verification | ⬜ |
+| M4 | Evidence + citation verification | ✅ live-verified |
 | M5 | Orchestration | ⬜ |
 | M6 | Report + UNKNOWN / information gaps | ⬜ |
 | M7 | Evaluation | ⬜ |

@@ -16,12 +16,17 @@ from app.schemas.runs import TokenUsage
 
 
 class ModelPrice(BaseModel):
-    """Per-million-token prices for one model."""
+    """Per-million-token prices and request capabilities for one model."""
 
     input_per_mtok: float
     output_per_mtok: float
     cache_read_per_mtok: float
     cache_write_per_mtok: float
+    # Whether the model accepts output_config.effort. Haiku 4.5 returns
+    # 400 "This model does not support the effort parameter." Recorded here so
+    # the client can omit it rather than every call site remembering.
+    # See docs/failure-analysis.md F-010.
+    supports_effort: bool = True
 
 
 # Source: Anthropic published pricing. Cache writes bill at ~1.25x input.
@@ -37,6 +42,7 @@ PRICES: dict[str, ModelPrice] = {
         output_per_mtok=5.00,
         cache_read_per_mtok=0.10,
         cache_write_per_mtok=1.25,
+        supports_effort=False,
     ),
 }
 
@@ -73,3 +79,14 @@ def cost_usd(model: str, usage: TokenUsage) -> float:
 def is_priced(model: str) -> bool:
     """Whether a price entry exists, for pre-flight configuration checks."""
     return model in PRICES
+
+
+def supports_effort(model: str) -> bool:
+    """Whether a model accepts `output_config.effort`.
+
+    Unknown models are assumed to support it: a new frontier model is far
+    more likely to accept effort than not, and `cost_usd` already fails loudly
+    on an unpriced model, so an unknown id does not get far.
+    """
+    price = PRICES.get(model)
+    return True if price is None else price.supports_effort

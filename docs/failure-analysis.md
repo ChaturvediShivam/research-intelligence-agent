@@ -257,3 +257,65 @@ of a new metric is not "is the number good" but "what number would a broken
 implementation produce" — and if the answer is the same number, the metric is
 decorative. Publishing that 1.000 as an M3 baseline would have been the single
 most misleading thing in this repository.
+
+---
+
+## F-009 · The apex domain of a primary TLD was classified UNVETTED
+
+**Milestone:** M4
+**Found by:** `tests/security/test_citation_verification.py` — the `www.gov.uk`
+credibility case
+
+**Symptom.** `classify_credibility("www.gov.uk")` returned `UNVETTED`.
+
+**Cause.** The primary-tier list holds suffixes with a leading dot
+(`".gov.uk"`), matched with `host.endswith(...)`. After stripping `www.`, the
+host is `gov.uk` — which does not end with `.gov.uk`, because the apex has no
+leading dot. So the single most credible source class in a UK regulatory
+corpus fell through to the most cautious tier.
+
+The direction of the error matters: it would have **depressed** confidence on
+good sources rather than inflating it on bad ones. Safer, but still wrong, and
+it would have made `HIGH` confidence nearly unreachable.
+
+**Fix.** `_matches_suffix()` checks both `host == bare` and
+`host.endswith("." + bare)`. Regression cases added for `gov.uk`,
+`www.gov.uk`, `europa.eu` and `ac.uk`, plus negative cases (`notgov.uk`,
+`fakeac.uk`) so the fix cannot be loosened into a substring match.
+
+---
+
+## F-010 · Haiku 4.5 rejects `output_config.effort`, and the client always sent it
+
+**Milestone:** M4 (live verification)
+**Found by:** the first live extraction call — HTTP 400
+
+**Symptom.** Every stage 5 call failed with
+`PipelineStageError: Evidence extraction failed: Anthropic rejected the
+request as invalid.` Isolated with a two-line probe:
+
+    haiku WITH effort:    400 — "This model does not support the effort parameter."
+    haiku WITHOUT effort: OK
+
+**Cause.** `LLMClient.structured` sent `output_config={"effort": effort}`
+unconditionally, because ADR-007 says effort must always be explicit. That
+rule is right for the Opus-tier models it was written against and wrong for
+Haiku 4.5, which rejects the parameter outright. Stage 5 is the first stage to
+route to Haiku, so nothing before M4 could have hit it.
+
+No offline test could have caught this. The fake transport accepts any
+keyword argument — a fake is, by construction, more permissive than the API,
+which is the same shape of blind spot as F-006.
+
+**Fix.** Capability moved into the model table beside the prices
+(`ModelPrice.supports_effort`), so the client omits `output_config` for models
+that reject it and no call site has to remember. Call sites still state the
+effort they want; it is applied where it can be. Pinned by tests at both the
+client and the stage, including one asserting that pointing
+`EXTRACTION_MODEL` at an effort-capable model does send it.
+
+**ADR-007 amended** rather than abandoned — see that file.
+
+**Lesson recorded.** "Always set X explicitly" is a rule about intent, not
+about the wire format. Per-model request capability belongs in data next to
+the other per-model facts, not in a convention each call site re-applies.

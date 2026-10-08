@@ -29,7 +29,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
 from app.core.errors import UpstreamError
-from app.llm.pricing import cost_usd
+from app.llm.pricing import cost_usd, supports_effort
 from app.schemas.runs import TokenUsage
 
 logger = structlog.get_logger(__name__)
@@ -125,7 +125,7 @@ class LLMClient:
         output_model: type[ModelT],
         system: str,
         user_content: str,
-        effort: str = "high",
+        effort: str | None = "high",
         max_tokens: int = 8192,
         cache_system: bool = True,
     ) -> LLMResult[ModelT]:
@@ -140,15 +140,26 @@ class LLMClient:
         if cache_system:
             system_blocks[0]["cache_control"] = {"type": "ephemeral"}
 
+        # Effort is explicit on every model that accepts one (ADR-007), and
+        # omitted entirely on models that reject it — Haiku 4.5 returns a 400
+        # for `output_config.effort`. Decided from the capability table rather
+        # than at each call site, so one forgotten branch cannot resurface it.
+        request: dict[str, Any] = {
+            "model": model,
+            "output_format": output_model,
+            "system": system_blocks,
+            "messages": [{"role": "user", "content": user_content}],
+            "max_tokens": max_tokens,
+        }
+        effort_applied: str | None = None
+        if supports_effort(model):
+            request["output_config"] = {"effort": effort}
+            effort_applied = effort
+        elif effort is not None:
+            logger.debug("effort_not_supported_omitted", model=model, requested=effort)
+
         started = time.perf_counter()
-        response = await self._call_with_retry(
-            model=model,
-            output_format=output_model,
-            system=system_blocks,
-            messages=[{"role": "user", "content": user_content}],
-            output_config={"effort": effort},
-            max_tokens=max_tokens,
-        )
+        response = await self._call_with_retry(**request)
         duration_ms = int((time.perf_counter() - started) * 1000)
 
         parsed = getattr(response, "parsed_output", None)
@@ -179,7 +190,7 @@ class LLMClient:
             "llm_call",
             model=model,
             output_model=output_model.__name__,
-            effort=effort,
+            effort=effort_applied,
             duration_ms=duration_ms,
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,

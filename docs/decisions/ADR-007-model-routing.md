@@ -41,3 +41,33 @@ so the extraction and synthesis stages cannot share a prompt cache.
 `RunTrace` and reported in `docs/cost-latency.md` from real runs. If extraction
 on Haiku measurably degrades evidence quality against the golden set, the
 routing changes — and the before/after is published rather than assumed.
+
+
+---
+
+## Amendment, 2026-10-08 (M4 implementation)
+
+**"Effort is always explicit" is now "effort is explicit wherever the model
+accepts one."**
+
+This ADR required `output_config.effort` on every call, because Claude Opus
+5.5 defaults to `medium` and leaving it implicit silently picks a level. Stage
+5 is the first stage to route to `claude-haiku-4-5`, and that model **rejects
+the parameter**: `400 — "This model does not support the effort parameter."`
+Every extraction call failed on the first live run (F-010).
+
+**Resolved as:** request capability is recorded in the model table beside the
+prices (`ModelPrice.supports_effort`). `LLMClient` applies effort where the
+model accepts it and omits `output_config` entirely where it does not. Call
+sites continue to declare the effort they want, so the intent behind this ADR
+is preserved and the wire format is handled in one place.
+
+**Why not simply drop effort from the extraction stage.** That would make the
+correct request today and the wrong one the moment `EXTRACTION_MODEL` is
+pointed at an effort-capable model — which is a configuration change, not a
+code change, and would silently lose the setting. Deciding from the capability
+table keeps both configurations correct.
+
+**Accepted cost:** one more per-model fact to maintain. Unknown models are
+assumed to support effort, on the grounds that a newer model is more likely to
+accept it than not, and an unpriced model already fails loudly in `cost_usd`.
