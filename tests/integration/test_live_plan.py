@@ -9,6 +9,8 @@ Run with:  uv run pytest -m live
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from app.core.config import Settings
@@ -57,11 +59,17 @@ async def test_real_plan_from_a_real_question() -> None:
     settings = Settings(environment="local")
     client = LLMClient(settings)
 
-    plan, metric = await run_plan_stage(
-        ResearchRequest(question=QUESTION),
-        client=client,
-        settings=settings,
-    )
+    try:
+        plan, metric = await run_plan_stage(
+            ResearchRequest(question=QUESTION),
+            client=client,
+            settings=settings,
+        )
+    finally:
+        await client.aclose()
+        # Drain pending transport callbacks; see failure-analysis F-006.
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
 
     # Structure
     assert 1 <= len(plan.sub_questions) <= 8
@@ -117,8 +125,14 @@ async def test_prompt_caching_actually_caches() -> None:
     client = LLMClient(settings)
     request = ResearchRequest(question=QUESTION)
 
-    _, first = await run_plan_stage(request, client=client, settings=settings)
-    _, second = await run_plan_stage(request, client=client, settings=settings)
+    try:
+        _, first = await run_plan_stage(request, client=client, settings=settings)
+        _, second = await run_plan_stage(request, client=client, settings=settings)
+    finally:
+        await client.aclose()
+        # Drain pending transport callbacks; see failure-analysis F-006.
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
 
     wrote = first.usage.cache_creation_input_tokens
     read = second.usage.cache_read_input_tokens

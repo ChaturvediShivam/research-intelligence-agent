@@ -61,6 +61,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         repo: RunRepository = app.state.run_repository
         repo.close()
+        client: LLMClient = app.state.llm_client
+        await client.aclose()
         logger.info("application_stop")
 
 

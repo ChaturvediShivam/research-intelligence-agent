@@ -99,6 +99,9 @@ def client_with_failing_llm(test_settings: Settings) -> Iterator[TestClient]:
         def __init__(self) -> None:
             self.messages = AlwaysFails()
 
+        async def close(self) -> None:
+            return None
+
     app.state.llm_client = LLMClient(test_settings, client=FailingClient())
     with TestClient(app) as c:
         yield c

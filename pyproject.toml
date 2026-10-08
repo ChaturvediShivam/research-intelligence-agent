@@ -73,7 +73,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Tests legitimately use assert (S101) and hardcoded throwaway values (S105/S106).
-"tests/**" = ["S101", "S105", "S106"]
+# S104 fires on the literal "0.0.0.0" in the SSRF suite, which asserts that
+# address is *blocked* — the opposite of binding to it.
+"tests/**" = ["S101", "S104", "S105", "S106"]
 
 # ---------------------------------------------------------------------------
 # Types — strict on application code
@@ -99,7 +101,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-q --strict-markers --strict-config"
+# -m "not live" makes billable tests opt-in. Without it, a developer with
+# a key configured spends money on every plain `pytest` run.
+addopts = "-q --strict-markers --strict-config -m 'not live'"
 markers = [
     "live: requires ANTHROPIC_API_KEY and makes real, billable API calls (deselected by default)",
 ]

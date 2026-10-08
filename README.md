@@ -84,9 +84,9 @@ claims.
 | 6 | LLM API integration | `app/llm/client.py` | `tests/unit/test_llm_client.py` | ✅ M1 |
 | 7 | Structured outputs | `app/pipeline/plan.py` | `tests/unit/test_plan_stage.py` | ✅ M1 (plan); extract in M4 |
 | 8 | Prompt / context engineering | `app/llm/context.py`, `app/llm/prompts/plan.v1.md` | `tests/unit/test_context.py`; eval deltas pending M7 | 🟡 M1 |
-| 9 | Source discovery | `app/tools/search.py` | integration tests | ⬜ M2 |
-| 10 | SSRF defence | `app/core/security.py` | `tests/security/` | ⬜ M2 |
-| 11 | RAG / chunking | `app/retrieval/chunking.py` | unit tests | ⬜ M3 |
+| 9 | Source discovery | `app/tools/search.py` | `tests/unit/test_search.py`; live: 6 real candidates | ✅ M2 |
+| 10 | SSRF defence | `app/core/security.py` | `tests/security/test_ssrf.py` (90 cases) | ✅ M2 |
+| 11 | Chunking + offset integrity | `app/retrieval/chunking.py` | `tests/unit/test_chunking.py`; live: 248/248 offsets verified | ✅ M2 |
 | 12 | Embeddings | `app/retrieval/embeddings.py` | determinism + dimension tests | ⬜ M3 |
 | 13 | Hybrid retrieval + RRF | `app/retrieval/hybrid.py` | ranking tests | ⬜ M3 |
 | 14 | Retrieval evaluation | `app/evaluation/metrics.py` | `evals/results/` | ⬜ M3 |
@@ -110,7 +110,7 @@ claims.
 |---|---|---|
 | M0 | Foundation: structure, config, logging, errors, CI, ADRs | ✅ |
 | M1 | API + research planning | ✅ live-verified |
-| M2 | Source ingestion | ⬜ |
+| M2 | Source ingestion | ✅ live-verified |
 | M3 | Retrieval + retrieval evaluation | ⬜ |
 | M4 | Evidence + citation verification | ⬜ |
 | M5 | Orchestration | ⬜ |

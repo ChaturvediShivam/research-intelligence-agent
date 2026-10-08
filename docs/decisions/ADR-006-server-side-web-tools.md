@@ -35,3 +35,36 @@ which is itself a useful constraint against a model inventing a target.
 
 **Revisit when:** measured source coverage on the golden set is the limiting
 factor.
+
+
+---
+
+## Amendment, 2026-10-08 (M2 implementation)
+
+**Discovery uses the server-side tool as decided. Fetching does not.**
+
+Implementing stage 3 surfaced a conflict between this ADR and
+[ADR-002](ADR-002-deterministic-citation-verification.md). Deterministic
+citation verification requires this service to hold the exact canonical text
+that citation offsets index into, byte for byte. A server-side `web_fetch`
+hands a document to the model; it does not hand this application a string it
+can slice at `[start_char:end_char]` later and compare.
+
+The architecture document already implied the resolution: stage 3 is specified
+as "fetch → SSRF guard → extract → sanitise → chunk", and an SSRF guard only
+has meaning if the outbound request is ours to refuse.
+
+**Resolved as:**
+
+- **`web_search_20260209`** for discovery — the vendor, key and ranking
+  argument in this ADR stands, as does `allowed_domains` / `blocked_domains`
+  as an enforced control.
+- **Local `httpx` fetch** for retrieval of text that will be cited, in
+  `app/tools/fetch.py`, behind `app/core/security.py`.
+
+**Consequences of the amendment.** Fetching locally means owning timeouts,
+size caps, content-type policy, redirect re-validation and encoding — roughly
+90 lines in `fetch.py`. In exchange: character offsets are ours, citation
+verification is possible at all, and the SSRF guard is enforceable. Both
+halves are covered by `tests/unit/test_fetch.py` and
+`tests/security/test_ssrf.py`.

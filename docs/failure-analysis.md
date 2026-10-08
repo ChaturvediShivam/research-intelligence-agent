@@ -113,3 +113,108 @@ validation exception discarded the response before `usage` was read, so the
 spend on a schema-rejected call is not captured. Noted rather than fixed —
 capturing usage on a validation failure is a real gap, logged here as a known
 limitation rather than silently absorbed.
+
+---
+
+## F-005 · The SSRF allowlist was an enumeration, and enumerations go stale
+
+**Milestone:** M2
+**Found by:** `tests/security/test_ssrf.py` — the `100.64.0.1` case
+
+**Symptom.** `100.64.0.1` passed every check in the SSRF guard and would have
+been fetched.
+
+**Cause.** `_classify` enumerated the conditions it knew about —
+`is_loopback`, `is_private`, `is_link_local`, `is_multicast`, `is_reserved`,
+`is_unspecified`. `100.64.0.0/10` is RFC 6598 carrier-grade NAT space, and
+Python reports it as **neither private nor reserved**:
+
+    >>> ipaddress.ip_address("100.64.0.1").is_private
+    False
+    >>> ipaddress.ip_address("100.64.0.1").is_reserved
+    False
+    >>> ipaddress.ip_address("100.64.0.1").is_global
+    False
+
+Only `is_global` tells the truth about it.
+
+**Fix.** `not ip.is_global` added as a catch-all **after** the specific checks.
+The specific checks stay because they produce a useful reason string for the
+log and the error; the catch-all is what makes the guard sound. Regression
+cases added for CGNAT, TEST-NET-1/2/3, the benchmarking range and the
+broadcast address.
+
+**Lesson recorded.** A security check built as a list of known-bad cases is
+only as current as the list. Where an authoritative predicate exists, the
+enumeration should narrow the message, not define the policy.
+
+---
+
+## F-006 · A defensive `getattr` turned a resource leak into a silent no-op
+
+**Milestone:** M2 (live verification)
+**Found by:** intermittent `RuntimeError: Event loop is closed` during live
+test teardown — passing on one run and failing on the next
+
+**Symptom.** `uv run pytest -m live` emitted a stray task error:
+
+    Task finished coro=<AsyncClient.aclose()> exception=RuntimeError('Event loop is closed')
+
+It failed the run once and passed the next. A rerun being green was not a fix.
+
+**Cause, in two layers.** The first attempt at a fix was:
+
+    closer = getattr(client, "aclose", None)
+    if closer is not None:
+        await closer()
+
+`httpx.AsyncClient` exposes `aclose()`. **`anthropic.AsyncAnthropic` exposes
+`close()`.** So for the real client the guard found nothing, did nothing, and
+reported success. The client was never closed; the garbage collector reaped
+its transport wrapper after the event loop had already gone, and the
+transport's own cleanup scheduled a task on a dead loop.
+
+The defensive `getattr` did not prevent a failure — it converted a loud one
+into an invisible one, and I then shipped a "fix" that fixed nothing.
+
+**Fix.** An explicit `aclose_client()` helper that tries `aclose` then
+`close`, awaits whichever is awaitable, and **raises `TypeError` if a client
+exposes neither** — because a client whose transport cannot be closed is a
+programming error, not a condition to tolerate. Wired into the application
+lifespan, which had never closed the LLM client at all, and into the live test
+fixtures.
+
+**Pinned by** `tests/unit/test_llm_client.py::TestTransportClosing`, including
+a regression test against the real `anthropic.AsyncAnthropic` asserting
+`is_closed()` flips to `True`.
+
+**Second-order finding.** Repairing this surfaced that `FakeAnthropic` had no
+close method either, so the fakes had a *more forgiving* surface than the real
+object — which is how the gap survived 121 offline tests. The fake now mirrors
+the real client and names the method `close()`.
+
+---
+
+## F-007 · Live, billable tests ran on every plain `pytest`
+
+**Milestone:** M2
+**Found by:** a full suite run taking 191 seconds instead of under one, after
+`ANTHROPIC_API_KEY` became available
+
+**Symptom.** `uv run pytest --cov` made real API calls and took over three
+minutes.
+
+**Cause.** The `live` marker was registered and the live tests were marked,
+but nothing deselected them. They had only ever *appeared* deselected because
+no key was configured and their `skipif` guard fired. The moment a key
+existed, every ordinary test run started spending money — while the README and
+the live-test docstrings both stated they were "deselected by default".
+
+**Fix.** `-m 'not live'` added to `addopts`, so live is genuinely opt-in and
+`-m live` on the command line selects it. Verified both directions with
+`--collect-only`: default collects 321 and deselects 7; `-m live` collects
+exactly the 7.
+
+**Lesson recorded.** A guard that happens to produce the right behaviour for
+the wrong reason is not a guard. The skip was environmental; the policy needed
+to be explicit.

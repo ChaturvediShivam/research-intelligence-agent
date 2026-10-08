@@ -221,3 +221,70 @@ class TestKeyRequirement:
                 system="s",
                 user_content="u",
             )
+
+
+class TestTransportClosing:
+    """F-006: a getattr-guarded close silently did nothing for AsyncAnthropic.
+
+    These tests pin the contract rather than the attribute name, so a future
+    refactor cannot reintroduce a silent no-op.
+    """
+
+    async def test_closes_a_client_exposing_aclose(self) -> None:
+        from app.llm.client import aclose_client
+
+        class WithAclose:
+            def __init__(self) -> None:
+                self.closed = False
+
+            async def aclose(self) -> None:
+                self.closed = True
+
+        c = WithAclose()
+        await aclose_client(c)
+        assert c.closed is True
+
+    async def test_closes_a_client_exposing_close(self) -> None:
+        """anthropic.AsyncAnthropic names it close(), not aclose()."""
+        from app.llm.client import aclose_client
+
+        class WithClose:
+            def __init__(self) -> None:
+                self.closed = False
+
+            async def close(self) -> None:
+                self.closed = True
+
+        c = WithClose()
+        await aclose_client(c)
+        assert c.closed is True
+
+    async def test_none_is_a_no_op(self) -> None:
+        from app.llm.client import aclose_client
+
+        await aclose_client(None)
+
+    async def test_a_client_with_no_close_method_raises(self) -> None:
+        """Silence here is what caused the leak; a loud failure replaces it."""
+        from app.llm.client import aclose_client
+
+        with pytest.raises(TypeError, match="neither aclose"):
+            await aclose_client(object())
+
+    async def test_real_anthropic_client_is_actually_closed(self) -> None:
+        """The regression test that matters: against the real SDK object."""
+        import anthropic
+
+        real = anthropic.AsyncAnthropic(api_key="sk-ant-not-used")
+        assert real.is_closed() is False
+        await LLMClient(_settings(), client=real).aclose()
+        assert real.is_closed() is True
+
+    async def test_llm_client_aclose_is_idempotent(self) -> None:
+        import anthropic
+
+        real = anthropic.AsyncAnthropic(api_key="sk-ant-not-used")
+        client = LLMClient(_settings(), client=real)
+        await client.aclose()
+        await client.aclose()
+        assert real.is_closed() is True

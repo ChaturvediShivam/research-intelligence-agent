@@ -18,6 +18,7 @@ error translation happen exactly once.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -42,6 +43,32 @@ _RETRYABLE = (
     anthropic.APIConnectionError,
     anthropic.InternalServerError,
 )
+
+
+async def aclose_client(client: Any | None) -> None:
+    """Close an async API client, whatever it calls its close method.
+
+    `httpx.AsyncClient` exposes `aclose()`; `anthropic.AsyncAnthropic` exposes
+    `close()`. A `getattr(client, "aclose", None)` guard silently did nothing
+    for the latter, so the client was never closed and its transport was
+    reaped by the garbage collector after the event loop had gone — surfacing
+    as an intermittent "Event loop is closed". Both names are tried, and a
+    client exposing neither is a programming error worth raising on.
+    See docs/failure-analysis.md F-006.
+    """
+    if client is None:
+        return
+    for name in ("aclose", "close"):
+        method = getattr(client, name, None)
+        if method is None:
+            continue
+        result = method()
+        if inspect.isawaitable(result):
+            await result
+        return
+    raise TypeError(
+        f"{type(client).__name__} exposes neither aclose() nor close(); its transport would leak."
+    )
 
 
 @dataclass(slots=True)
@@ -211,6 +238,16 @@ class LLMClient:
             f"Anthropic call failed after {self._max_attempts} attempts.",
             details={"error_type": type(last).__name__ if last else None},
         ) from last
+
+    async def aclose(self) -> None:
+        """Close the underlying transport.
+
+        An AsyncAnthropic owns an httpx client; letting the garbage collector
+        reap it after the event loop has closed raises "Event loop is closed"
+        from the transport's destructor. Observed in M2 live verification.
+        """
+        await aclose_client(self._client)
+        self._client = None
 
     @staticmethod
     def _retry_delay(exc: Exception, attempt: int) -> float:

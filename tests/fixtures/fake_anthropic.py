@@ -52,3 +52,13 @@ class FakeAnthropic:
 
     def __init__(self, outcomes: list[Any]) -> None:
         self.messages = FakeMessages(outcomes)
+        self.closed = False
+
+    async def close(self) -> None:
+        """Mirror the real client's close(), not aclose().
+
+        The real AsyncAnthropic names it `close()`. The fake matches that
+        deliberately: a fake with a more forgiving surface than the real
+        object hides exactly the bug F-006 was.
+        """
+        self.closed = True
