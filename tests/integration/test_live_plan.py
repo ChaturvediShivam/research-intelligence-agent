@@ -9,8 +9,6 @@ Run with:  uv run pytest -m live
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from app.core.config import Settings
@@ -18,11 +16,29 @@ from app.llm.client import LLMClient
 from app.pipeline.plan import run_plan_stage
 from app.schemas.research import ResearchRequest
 
+
+def _key_available() -> bool:
+    """Whether a key is resolvable the way the application resolves one.
+
+    Checking os.environ alone was wrong: Settings also reads `.env`, which is
+    the path .env.example documents, so an env-only guard skipped the live
+    tests on a correctly configured machine.
+    """
+    try:
+        Settings(environment="local").require_anthropic_key()
+    except Exception:
+        return False
+    return True
+
+
 pytestmark = [
     pytest.mark.live,
     pytest.mark.skipif(
-        not os.environ.get("ANTHROPIC_API_KEY"),
-        reason="ANTHROPIC_API_KEY is not set; live verification cannot run",
+        not _key_available(),
+        reason=(
+            "No ANTHROPIC_API_KEY resolvable from the environment or .env; "
+            "live verification cannot run"
+        ),
     ),
 ]
 
