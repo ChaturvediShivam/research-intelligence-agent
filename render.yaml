@@ -40,6 +40,12 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
 
+      # Contact address sec.gov requires automated clients to declare, or it
+      # returns 403. sync:false because it is a real address, not a secret
+      # but not something to commit either. Unset only costs SEC access.
+      - key: SEC_CONTACT_EMAIL
+        sync: false
+
       - key: ENVIRONMENT
         value: production
       - key: LOG_JSON

@@ -74,6 +74,15 @@ class Settings(BaseSettings):
     allowed_source_domains: tuple[str, ...] = ()
     blocked_source_domains: tuple[str, ...] = ()
 
+    # --- SEC EDGAR ---------------------------------------------------------
+    # sec.gov rejects automated requests that do not declare a contact
+    # address, returning 403 (sec.gov/os/webmaster-faq). Environment-driven
+    # (SEC_CONTACT_EMAIL) rather than committed, because it is a real personal
+    # or role address and does not belong in the repository. Unset means SEC
+    # sources stay unreadable, which is the honest default: fabricating a
+    # contact address to satisfy a policy would defeat the policy.
+    sec_contact_email: str | None = None
+
     @field_validator("log_level")
     @classmethod
     def _validate_log_level(cls, value: str) -> str:
@@ -82,6 +91,26 @@ class Settings(BaseSettings):
         if upper not in allowed:
             raise ValueError(f"log_level must be one of {sorted(allowed)}, got {value!r}")
         return upper
+
+    @field_validator("sec_contact_email")
+    @classmethod
+    def _validate_sec_contact(cls, value: str | None) -> str | None:
+        """Reject a malformed contact rather than let SEC reject every fetch.
+
+        A typo here fails at startup. Without this it fails much later, as a
+        403 indistinguishable from the one this setting exists to fix.
+        """
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if "@" not in cleaned or any(c.isspace() for c in cleaned):
+            raise ValueError(
+                "sec_contact_email must be a single email address, e.g. "
+                "name@example.com; SEC requires a contactable address."
+            )
+        return cleaned
 
     @field_validator("max_cost_usd_per_run")
     @classmethod

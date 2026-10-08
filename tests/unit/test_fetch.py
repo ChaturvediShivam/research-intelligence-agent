@@ -16,6 +16,7 @@ from app.core.errors import UnsafeURLError, UpstreamError
 from app.schemas.source import content_hash
 from app.tools.fetch import (
     MAX_CONTENT_BYTES,
+    SEC_USER_AGENT_NAME,
     SourceFetcher,
     extract_text,
     normalise_text,
@@ -272,3 +273,144 @@ class TestGuardAppliesBeforeAnyRequest:
         )
         with pytest.raises(UnsafeURLError, match="allowed-domain"):
             await fetcher.fetch("https://example.com/x")
+
+
+# ==========================================================================
+# SEC EDGAR access — sec.gov 403s automated clients that do not declare a
+# contact address. Reproduced in production by run_67498d61c5794183, where
+# two NVIDIA 10-K filings failed with HTTP 403 / access_restricted.
+# ==========================================================================
+
+SEC_URL = "https://www.sec.gov/Archives/edgar/data/1045810/nvda-20250126.htm"
+CONTACT = "research@example.com"
+
+
+def _sec_fetcher(contact: str | None = CONTACT) -> SourceFetcher:
+    return _fetcher(_settings(sec_contact_email=contact))
+
+
+class TestSecUserAgent:
+    @respx.mock
+    async def test_a_sec_request_declares_the_contact_address(self) -> None:
+        route = respx.get(SEC_URL).mock(
+            return_value=httpx.Response(200, html=HTML, headers={"content-type": "text/html"})
+        )
+        await _sec_fetcher().fetch(SEC_URL)
+
+        headers = route.calls.last.request.headers
+        assert headers["user-agent"] == f"{SEC_USER_AGENT_NAME} {CONTACT}"
+        # Required alongside the User-Agent by sec.gov/os/webmaster-faq.
+        assert headers["accept-encoding"] == "gzip, deflate"
+
+    @respx.mock
+    async def test_the_contact_address_comes_from_configuration(self) -> None:
+        """Not hard-coded: a different contact must reach the wire."""
+        route = respx.get(SEC_URL).mock(
+            return_value=httpx.Response(200, html=HTML, headers={"content-type": "text/html"})
+        )
+        await _sec_fetcher("someone.else@example.org").fetch(SEC_URL)
+        assert "someone.else@example.org" in route.calls.last.request.headers["user-agent"]
+
+    @respx.mock
+    async def test_a_sec_subdomain_is_covered(self) -> None:
+        url = "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json"
+        route = respx.get(url).mock(
+            return_value=httpx.Response(200, text="plain", headers={"content-type": "text/plain"})
+        )
+        await _sec_fetcher().fetch(url)
+        assert CONTACT in route.calls.last.request.headers["user-agent"]
+
+
+class TestNonSecRequestsAreUnchanged:
+    @respx.mock
+    async def test_an_ordinary_source_does_not_receive_the_contact(self) -> None:
+        """The contact address is not broadcast to the open web."""
+        url = "https://www.abi.org.uk/data/pet-insurance"
+        route = respx.get(url).mock(
+            return_value=httpx.Response(200, html=HTML, headers={"content-type": "text/html"})
+        )
+        await _sec_fetcher().fetch(url)
+
+        headers = route.calls.last.request.headers
+        assert CONTACT not in headers["user-agent"]
+        assert "@" not in headers["user-agent"]
+        # Exactly the client default, with nothing appended for this host.
+        assert headers["user-agent"] == (
+            f"{SEC_USER_AGENT_NAME} (+https://github.com/ChaturvediShivam)"
+        )
+
+    @respx.mock
+    async def test_a_lookalike_host_does_not_receive_the_contact(self) -> None:
+        """`sec.gov.example.com` and `notsec.gov` are not sec.gov."""
+        for url in (
+            "https://sec.gov.example.com/filing.htm",
+            "https://notsec.gov/filing.htm",
+        ):
+            route = respx.get(url).mock(
+                return_value=httpx.Response(200, html=HTML, headers={"content-type": "text/html"})
+            )
+            await _sec_fetcher().fetch(url)
+            assert CONTACT not in route.calls.last.request.headers["user-agent"], url
+
+    @respx.mock
+    async def test_the_header_follows_the_host_across_redirects(self) -> None:
+        """Recomputed per hop: added on entering sec.gov, dropped on leaving."""
+        off_sec = "https://www.example.org/mirror.htm"
+        sec_route = respx.get(SEC_URL).mock(
+            return_value=httpx.Response(302, headers={"location": off_sec})
+        )
+        off_route = respx.get(off_sec).mock(
+            return_value=httpx.Response(200, html=HTML, headers={"content-type": "text/html"})
+        )
+        await _sec_fetcher().fetch(SEC_URL)
+
+        assert CONTACT in sec_route.calls.last.request.headers["user-agent"]
+        assert CONTACT not in off_route.calls.last.request.headers["user-agent"]
+
+
+class TestSecAccessIsNotWeakened:
+    @respx.mock
+    async def test_an_unconfigured_contact_sends_no_contact_header(self) -> None:
+        route = respx.get(SEC_URL).mock(
+            return_value=httpx.Response(200, html=HTML, headers={"content-type": "text/html"})
+        )
+        await _sec_fetcher(None).fetch(SEC_URL)
+        assert "@" not in route.calls.last.request.headers["user-agent"]
+
+    @respx.mock
+    async def test_a_403_is_still_a_failure(self) -> None:
+        """The fix is to be allowed in, never to pretend a refusal succeeded."""
+        respx.get(SEC_URL).mock(return_value=httpx.Response(403))
+        with pytest.raises(UpstreamError) as exc:
+            await _sec_fetcher().fetch(SEC_URL)
+        assert "403" in str(exc.value)
+
+    @respx.mock
+    async def test_a_403_is_still_a_failure_when_unconfigured(self) -> None:
+        respx.get(SEC_URL).mock(return_value=httpx.Response(403))
+        with pytest.raises(UpstreamError):
+            await _sec_fetcher(None).fetch(SEC_URL)
+
+    @respx.mock
+    async def test_timeout_classification_is_unchanged_for_sec(self) -> None:
+        respx.get(SEC_URL).mock(side_effect=httpx.ConnectTimeout("slow"))
+        with pytest.raises(UpstreamError) as exc:
+            await _sec_fetcher().fetch(SEC_URL)
+        assert "timed out" in str(exc.value)
+
+
+class TestSecContactValidation:
+    def test_a_malformed_contact_is_rejected_at_startup(self) -> None:
+        with pytest.raises(ValueError, match="single email address"):
+            _settings(sec_contact_email="not-an-email")
+
+    def test_a_contact_with_whitespace_is_rejected(self) -> None:
+        """Whitespace would split the User-Agent and break the format."""
+        with pytest.raises(ValueError, match="single email address"):
+            _settings(sec_contact_email="first last@example.com")
+
+    def test_blank_is_treated_as_unset(self) -> None:
+        assert _settings(sec_contact_email="   ").sec_contact_email is None
+
+    def test_a_valid_contact_is_stripped(self) -> None:
+        assert _settings(sec_contact_email="  a@b.com ").sec_contact_email == "a@b.com"

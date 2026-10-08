@@ -110,6 +110,7 @@ liveness probe.
 | Variable | Required for research | Default | Notes |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | **yes** | – | The only secret. Set it in Render's dashboard, never in a file. |
+| `SEC_CONTACT_EMAIL` | no, but SEC sources fail without it | – | A contact address sec.gov requires automated clients to declare, or it returns **403**. Sent only to `sec.gov` hosts. See below. |
 | `PORT` | no | `8000` | Injected by Render; the container binds it. |
 | `ENVIRONMENT` | no | `local` | Set to `production`. |
 | `LOG_JSON` | no | `false` | Set to `true` in production. |
@@ -189,6 +190,42 @@ embedding a 32-passage batch peaks at **221 MB RSS**. Worst case is therefore
 around **307 MB against 512 MB**. An earlier draft of this file guessed that
 512 MB was "likely too small"; the measurement says otherwise, and the guess
 was wrong.
+
+## SEC EDGAR access
+
+`sec.gov` refuses automated requests that do not declare a contact address,
+returning HTTP 403. Production run `run_67498d61c5794183` hit this on two
+NVIDIA 10-K filings — the two best primary sources discovery had found.
+
+Set `SEC_CONTACT_EMAIL` to a contactable address. `app/tools/fetch.py` then
+sends the format sec.gov documents:
+
+```
+User-Agent: ResearchIntelligenceAgent/0.1 <SEC_CONTACT_EMAIL>
+Accept-Encoding: gzip, deflate
+```
+
+Three properties worth knowing:
+
+- **It is sent only to `sec.gov` and its subdomains.** The header is set
+  per-request, not on the shared client, so the address is never disclosed to
+  other sites the agent fetches. Host matching reuses the same subdomain-aware
+  comparison the domain policy uses, so `sec.gov.example.com` and
+  `notsec.gov` do not qualify.
+- **It is recomputed on every redirect hop.** Entering `sec.gov` adds it;
+  being redirected off `sec.gov` drops it.
+- **Leaving it unset changes nothing else.** The fetch still happens, SEC
+  still refuses it, and a warning naming the variable is logged so the 403 is
+  distinguishable from a genuine access restriction. A 403 is never treated
+  as success either way.
+
+In Render the variable is declared `sync: false`, so it is prompted for
+rather than committed. SEC also caps automated access at 10 requests/second;
+this service fetches at most `MAX_SOURCES_PER_RUN` documents per run, well
+inside that.
+
+PDFs remain unsupported, so a filing served as `application/pdf` is still
+refused with `Unsupported content type`. That is a separate limitation.
 
 ## Production smoke test
 

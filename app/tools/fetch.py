@@ -28,7 +28,7 @@ import trafilatura
 
 from app.core.config import Settings
 from app.core.errors import UnsafeURLError, UpstreamError
-from app.core.security import AddressResolver, validate_url
+from app.core.security import AddressResolver, _host_matches, validate_url
 from app.schemas.source import FetchedSource, content_hash
 
 logger = structlog.get_logger(__name__)
@@ -37,6 +37,13 @@ logger = structlog.get_logger(__name__)
 # an unbounded read is a trivial memory-exhaustion vector.
 MAX_CONTENT_BYTES = 5 * 1024 * 1024
 MAX_REDIRECTS = 5
+
+# sec.gov requires automated clients to declare a contact address in the
+# User-Agent, and returns 403 otherwise. The documented format is
+# "Company Name contact@domain" (sec.gov/os/webmaster-faq), plus
+# `Accept-Encoding: gzip, deflate`. `Host` is also required and httpx sets it.
+SEC_DOMAIN = "sec.gov"
+SEC_USER_AGENT_NAME = "ResearchIntelligenceAgent/0.1"
 
 # Content types worth extracting text from. Anything else is refused before
 # the body is read.
@@ -140,6 +147,39 @@ class SourceFetcher:
             )
         return self._client
 
+    def _request_headers(self, url: str) -> dict[str, str]:
+        """Per-request header overrides for this hop. Usually empty.
+
+        Set on the request rather than on the client on purpose: the client is
+        shared across every source on the open web, and a contact address
+        installed as a default header would be disclosed to all of them. This
+        sends it only to the host that requires it.
+
+        Recomputed per redirect hop by the caller, so a sec.gov -> sec.gov
+        redirect keeps the header and a redirect off sec.gov drops it.
+        """
+        host = httpx.URL(url).host
+        if not _host_matches(host, SEC_DOMAIN):
+            return {}
+
+        contact = self._settings.sec_contact_email
+        if not contact:
+            # Not an error: the fetch proceeds and SEC will refuse it. Logged
+            # because a 403 from sec.gov is otherwise indistinguishable from
+            # a genuine access restriction.
+            logger.warning(
+                "sec_contact_not_configured",
+                host=host,
+                remedy="set SEC_CONTACT_EMAIL to a contactable address",
+            )
+            return {}
+
+        return {
+            # Format required by sec.gov/os/webmaster-faq.
+            "User-Agent": f"{SEC_USER_AGENT_NAME} {contact}",
+            "Accept-Encoding": "gzip, deflate",
+        }
+
     def _validate(self, url: str) -> str:
         return validate_url(
             url,
@@ -156,7 +196,7 @@ class SourceFetcher:
 
         for _ in range(MAX_REDIRECTS + 1):
             try:
-                response = await client.get(current)
+                response = await client.get(current, headers=self._request_headers(current))
             except httpx.TimeoutException as exc:
                 raise UpstreamError(
                     "Source fetch timed out.", details={"url": current[:200]}
