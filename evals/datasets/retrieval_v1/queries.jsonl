@@ -1,0 +1,10 @@
+{"query_id": "q01", "query": "UK pet insurance market size gross written premium", "judgments": {"abi-pet-market": 2, "pet-claims-trends": 1}}
+{"query_id": "q02", "query": "FCA general insurance value measures claims acceptance rates", "judgments": {"fca-value-measures": 2, "fca-pricing-practices": 1}}
+{"query_id": "q03", "query": "Solvency Capital Requirement for UK insurers", "judgments": {"pra-solvency": 2}}
+{"query_id": "q04", "query": "loyalty penalty price walking home and motor insurance", "judgments": {"fca-pricing-practices": 2}}
+{"query_id": "q05", "query": "why are pet insurance claims getting more expensive", "judgments": {"pet-claims-trends": 2, "abi-pet-market": 1}}
+{"query_id": "q06", "query": "Insurance Premium Tax higher rate travel insurance", "judgments": {"hmrc-ipt": 2}}
+{"query_id": "q07", "query": "how much am I covered for if my insurer goes bust", "judgments": {"fscs-compensation": 2}}
+{"query_id": "q08", "query": "when does the CMA make a market investigation reference", "judgments": {"cma-market-investigation": 2}}
+{"query_id": "q09", "query": "what is pushing up the cost of motor claims", "judgments": {"motor-claims-inflation": 2, "fca-value-measures": 1}}
+{"query_id": "q10", "query": "insurtech venture capital funding rounds and exits", "judgments": {"insurtech-funding": 2}}

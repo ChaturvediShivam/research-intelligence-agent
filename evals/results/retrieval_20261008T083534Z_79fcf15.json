@@ -1,0 +1,1629 @@
+{
+  "generated_at": "2026-10-08T08:35:34.139362+00:00",
+  "git_sha": "79fcf15",
+  "reports": [
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 1,
+      "mrr": 1.0,
+      "ndcg_at_k": 0.933333,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.3333333333333333,
+          "precision_at_k": 1.0,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        }
+      ],
+      "precision_at_k": 1.0,
+      "queries": 10,
+      "recall_at_k": 0.8,
+      "retriever": "hybrid"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 3,
+      "mrr": 1.0,
+      "ndcg_at_k": 0.972459,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 0.9639404333166532,
+          "precision_at_k": 0.6666666666666666,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "hmrc-ipt",
+            "pet-claims-trends"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.6666666666666666,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures",
+            "fca-pricing-practices",
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency",
+            "employers-liability",
+            "fscs-compensation"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "fscs-compensation",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.7967075809905066,
+          "precision_at_k": 0.6666666666666666,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pet-claims-trends",
+            "travel-insurance-claims"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt",
+            "travel-insurance-claims",
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation",
+            "home-emergency-cover",
+            "employers-liability"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation",
+            "fca-consumer-duty",
+            "fca-pricing-practices"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.9639404333166532,
+          "precision_at_k": 0.6666666666666666,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "motor-claims-inflation",
+            "pet-claims-trends",
+            "fca-value-measures"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding",
+            "pra-solvency",
+            "reinsurance-market"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        }
+      ],
+      "precision_at_k": 0.466667,
+      "queries": 10,
+      "recall_at_k": 1.0,
+      "retriever": "hybrid"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 5,
+      "mrr": 1.0,
+      "ndcg_at_k": 0.972459,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 0.9639404333166532,
+          "precision_at_k": 0.4,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "hmrc-ipt",
+            "pet-claims-trends",
+            "pra-solvency",
+            "pet-ownership-demographics"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.4,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures",
+            "fca-pricing-practices",
+            "hmrc-ipt",
+            "fscs-compensation",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency",
+            "employers-liability",
+            "fscs-compensation",
+            "insurtech-funding",
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "fscs-compensation",
+            "gap-insurance",
+            "hmrc-ipt",
+            "reinsurance-market"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.7967075809905066,
+          "precision_at_k": 0.4,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pet-claims-trends",
+            "travel-insurance-claims",
+            "motor-claims-inflation",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt",
+            "travel-insurance-claims",
+            "abi-pet-market",
+            "annuity-rates",
+            "employers-liability"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation",
+            "home-emergency-cover",
+            "employers-liability",
+            "fca-value-measures",
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation",
+            "fca-consumer-duty",
+            "fca-pricing-practices",
+            "pet-claims-trends",
+            "pra-solvency"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.9639404333166532,
+          "precision_at_k": 0.4,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "motor-claims-inflation",
+            "pet-claims-trends",
+            "fca-value-measures",
+            "fscs-compensation",
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding",
+            "pra-solvency",
+            "reinsurance-market",
+            "travel-insurance-claims",
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "dense",
+            "lexical"
+          ]
+        }
+      ],
+      "precision_at_k": 0.28,
+      "queries": 10,
+      "recall_at_k": 1.0,
+      "retriever": "hybrid"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 1,
+      "mrr": 1.0,
+      "ndcg_at_k": 0.933333,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.3333333333333333,
+          "precision_at_k": 1.0,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        }
+      ],
+      "precision_at_k": 1.0,
+      "queries": 10,
+      "recall_at_k": 0.8,
+      "retriever": "dense"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 3,
+      "mrr": 1.0,
+      "ndcg_at_k": 0.962294,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.6666666666666666,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pet-claims-trends",
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.6666666666666666,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures",
+            "fca-pricing-practices",
+            "fscs-compensation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency",
+            "fscs-compensation",
+            "employers-liability"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "hmrc-ipt",
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.7967075809905066,
+          "precision_at_k": 0.6666666666666666,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pet-claims-trends",
+            "pet-ownership-demographics"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt",
+            "travel-insurance-claims",
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation",
+            "hmrc-ipt",
+            "home-emergency-cover"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation",
+            "fca-pricing-practices",
+            "pra-solvency"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.8262346571285599,
+          "precision_at_k": 0.3333333333333333,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "motor-claims-inflation",
+            "pet-claims-trends",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding",
+            "pra-solvency",
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        }
+      ],
+      "precision_at_k": 0.433333,
+      "queries": 10,
+      "recall_at_k": 0.95,
+      "retriever": "dense"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 5,
+      "mrr": 1.0,
+      "ndcg_at_k": 0.974156,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.4,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pet-claims-trends",
+            "hmrc-ipt",
+            "fscs-compensation",
+            "employers-liability"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.4,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures",
+            "fca-pricing-practices",
+            "fscs-compensation",
+            "pet-claims-trends",
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency",
+            "fscs-compensation",
+            "employers-liability",
+            "insurtech-funding",
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "hmrc-ipt",
+            "motor-claims-inflation",
+            "fscs-compensation",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.7967075809905066,
+          "precision_at_k": 0.4,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pet-claims-trends",
+            "pet-ownership-demographics",
+            "travel-insurance-claims",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt",
+            "travel-insurance-claims",
+            "abi-pet-market",
+            "annuity-rates",
+            "fscs-compensation"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation",
+            "hmrc-ipt",
+            "home-emergency-cover",
+            "abi-pet-market",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation",
+            "fca-pricing-practices",
+            "pra-solvency",
+            "fca-value-measures",
+            "fca-consumer-duty"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.944847956559586,
+          "precision_at_k": 0.4,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "motor-claims-inflation",
+            "pet-claims-trends",
+            "gap-insurance",
+            "fca-value-measures",
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding",
+            "pra-solvency",
+            "motor-claims-inflation",
+            "reinsurance-market",
+            "annuity-rates"
+          ],
+          "top_hit_retrievers": [
+            "dense"
+          ]
+        }
+      ],
+      "precision_at_k": 0.28,
+      "queries": 10,
+      "recall_at_k": 1.0,
+      "retriever": "dense"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 1,
+      "mrr": 0.883333,
+      "ndcg_at_k": 0.8,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.0,
+          "precision_at_k": 0.0,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved_docs": [
+            "fca-pricing-practices"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.0,
+          "precision_at_k": 0.0,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.5,
+          "retrieved_docs": [
+            "vet-workforce"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 1.0,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        }
+      ],
+      "precision_at_k": 0.8,
+      "queries": 10,
+      "recall_at_k": 0.7,
+      "retriever": "lexical"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 3,
+      "mrr": 0.883333,
+      "ndcg_at_k": 0.844918,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 0.9639404333166532,
+          "precision_at_k": 0.6666666666666666,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pra-solvency",
+            "pet-claims-trends"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.8262346571285599,
+          "precision_at_k": 0.3333333333333333,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures",
+            "hmrc-ipt",
+            "fscs-compensation"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency",
+            "abi-pet-market",
+            "fca-consumer-duty"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "fca-value-measures",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.13770577618809332,
+          "precision_at_k": 0.3333333333333333,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "annuity-rates",
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt",
+            "abi-pet-market",
+            "annuity-rates"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation",
+            "home-emergency-cover",
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation",
+            "fca-consumer-duty",
+            "travel-insurance-claims"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.52129602861432,
+          "precision_at_k": 0.3333333333333333,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 0.5,
+          "reciprocal_rank": 0.5,
+          "retrieved_docs": [
+            "vet-workforce",
+            "motor-claims-inflation",
+            "pet-claims-trends"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.3333333333333333,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding",
+            "pra-solvency",
+            "abi-pet-market"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        }
+      ],
+      "precision_at_k": 0.366667,
+      "queries": 10,
+      "recall_at_k": 0.85,
+      "retriever": "lexical"
+    },
+    {
+      "chunk_tokens": 40,
+      "chunks": 88,
+      "dataset": "retrieval_v1",
+      "documents": 20,
+      "embedding_model": "BAAI/bge-small-en-v1.5",
+      "k": 5,
+      "mrr": 0.883333,
+      "ndcg_at_k": 0.903017,
+      "overlap_tokens": 8,
+      "per_query": [
+        {
+          "ndcg_at_k": 0.9639404333166532,
+          "precision_at_k": 0.4,
+          "query": "UK pet insurance market size gross written premium",
+          "query_id": "q01",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "abi-pet-market",
+            "pra-solvency",
+            "pet-claims-trends",
+            "hmrc-ipt",
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.944847956559586,
+          "precision_at_k": 0.4,
+          "query": "FCA general insurance value measures claims acceptance rates",
+          "query_id": "q02",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-value-measures",
+            "hmrc-ipt",
+            "fscs-compensation",
+            "fca-pricing-practices",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "Solvency Capital Requirement for UK insurers",
+          "query_id": "q03",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "pra-solvency",
+            "abi-pet-market",
+            "fca-consumer-duty",
+            "reinsurance-market",
+            "insurtech-funding"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "loyalty penalty price walking home and motor insurance",
+          "query_id": "q04",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "fca-value-measures",
+            "gap-insurance",
+            "fscs-compensation",
+            "motor-claims-inflation"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.4935456744811716,
+          "precision_at_k": 0.4,
+          "query": "why are pet insurance claims getting more expensive",
+          "query_id": "q05",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved_docs": [
+            "fca-pricing-practices",
+            "annuity-rates",
+            "abi-pet-market",
+            "pet-claims-trends",
+            "travel-insurance-claims"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "Insurance Premium Tax higher rate travel insurance",
+          "query_id": "q06",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "hmrc-ipt",
+            "abi-pet-market",
+            "annuity-rates",
+            "travel-insurance-claims",
+            "employers-liability"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "how much am I covered for if my insurer goes bust",
+          "query_id": "q07",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "fscs-compensation",
+            "home-emergency-cover",
+            "abi-pet-market",
+            "pra-solvency",
+            "fca-value-measures"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "when does the CMA make a market investigation reference",
+          "query_id": "q08",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "cma-market-investigation",
+            "fca-consumer-duty",
+            "travel-insurance-claims",
+            "motor-claims-inflation",
+            "gap-insurance"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 0.6278397607958708,
+          "precision_at_k": 0.4,
+          "query": "what is pushing up the cost of motor claims",
+          "query_id": "q09",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "retrieved_docs": [
+            "vet-workforce",
+            "motor-claims-inflation",
+            "pet-claims-trends",
+            "fscs-compensation",
+            "fca-value-measures"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        },
+        {
+          "ndcg_at_k": 1.0,
+          "precision_at_k": 0.2,
+          "query": "insurtech venture capital funding rounds and exits",
+          "query_id": "q10",
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved_docs": [
+            "insurtech-funding",
+            "pra-solvency",
+            "abi-pet-market",
+            "reinsurance-market",
+            "travel-insurance-claims"
+          ],
+          "top_hit_retrievers": [
+            "lexical"
+          ]
+        }
+      ],
+      "precision_at_k": 0.28,
+      "queries": 10,
+      "recall_at_k": 1.0,
+      "retriever": "lexical"
+    }
+  ]
+}

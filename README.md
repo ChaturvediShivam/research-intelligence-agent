@@ -87,9 +87,9 @@ claims.
 | 9 | Source discovery | `app/tools/search.py` | `tests/unit/test_search.py`; live: 6 real candidates | ✅ M2 |
 | 10 | SSRF defence | `app/core/security.py` | `tests/security/test_ssrf.py` (90 cases) | ✅ M2 |
 | 11 | Chunking + offset integrity | `app/retrieval/chunking.py` | `tests/unit/test_chunking.py`; live: 248/248 offsets verified | ✅ M2 |
-| 12 | Embeddings | `app/retrieval/embeddings.py` | determinism + dimension tests | ⬜ M3 |
-| 13 | Hybrid retrieval + RRF | `app/retrieval/hybrid.py` | ranking tests | ⬜ M3 |
-| 14 | Retrieval evaluation | `app/evaluation/metrics.py` | `evals/results/` | ⬜ M3 |
+| 12 | Embeddings | `app/retrieval/embeddings.py` | `tests/integration/test_real_embeddings.py` (real model) | ✅ M3 |
+| 13 | Hybrid retrieval + RRF | `app/retrieval/hybrid.py`, `store.py` | `tests/unit/test_hybrid.py`, `test_store.py` | ✅ M3 |
+| 14 | Retrieval evaluation | `app/evaluation/metrics.py`, `runner.py` | [`docs/evaluation.md`](docs/evaluation.md) — measured baseline | ✅ M3 |
 | 15 | Evidence extraction | `app/pipeline/extract.py` | fixture tests | ⬜ M4 |
 | 16 | **Citation verification** | `app/pipeline/validate.py` | **fabricated-citation test** | ⬜ M4 |
 | 17 | Credibility + corroboration | `app/pipeline/validate.py` | rule tests | ⬜ M4 |
@@ -111,7 +111,7 @@ claims.
 | M0 | Foundation: structure, config, logging, errors, CI, ADRs | ✅ |
 | M1 | API + research planning | ✅ live-verified |
 | M2 | Source ingestion | ✅ live-verified |
-| M3 | Retrieval + retrieval evaluation | ⬜ |
+| M3 | Retrieval + retrieval evaluation | ✅ measured baseline |
 | M4 | Evidence + citation verification | ⬜ |
 | M5 | Orchestration | ⬜ |
 | M6 | Report + UNKNOWN / information gaps | ⬜ |

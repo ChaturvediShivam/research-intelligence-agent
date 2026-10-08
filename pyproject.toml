@@ -76,6 +76,9 @@ ignore = [
 # S104 fires on the literal "0.0.0.0" in the SSRF suite, which asserts that
 # address is *blocked* — the opposite of binding to it.
 "tests/**" = ["S101", "S104", "S105", "S106"]
+# The eval script shells out to `git` to stamp a result with its SHA.
+# A partial path is correct here: the developer's PATH is the point.
+"scripts/**" = ["S603", "S607"]
 
 # ---------------------------------------------------------------------------
 # Types — strict on application code

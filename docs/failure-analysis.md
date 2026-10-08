@@ -218,3 +218,42 @@ exactly the 7.
 **Lesson recorded.** A guard that happens to produce the right behaviour for
 the wrong reason is not a guard. The skip was environmental; the policy needed
 to be explicit.
+
+---
+
+## F-008 · My first eval fixture measured nothing
+
+**Milestone:** M3
+**Found by:** reading the first eval output instead of accepting it
+
+**Symptom.** The harness ran, produced numbers, and reported
+`recall@10 = 1.000` for hybrid, dense and lexical alike. Taken at face value,
+a perfect retrieval baseline.
+
+**Cause.** The fixture had **10 documents and the cutoff was k=10.** Retrieving
+ten documents from a corpus of ten necessarily finds every relevant one, so
+recall@10 was 1.000 by construction, for any retriever, including a random
+one. The metric carried no information.
+
+Two further defects in the same design:
+
+- **No hard negatives.** Every document was relevant to some query, so there
+  was nothing for a retriever to be wrong about and precision could not
+  discriminate.
+- **Documents shorter than one chunk.** Each ~120-word document produced
+  exactly one chunk at the shipped 512-token budget, so the chunk→document
+  collapse in the harness was never exercised, and fusion had nothing to
+  reorder.
+
+**Fix.** Ten hard-negative documents added — same domain, overlapping
+vocabulary, relevant to no query — taking the corpus to 20. Cutoffs changed to
+report k ∈ {1, 3, 5, 10}, and the harness now prints a warning when a
+requested cutoff is at or above the corpus size. recall@1 is 0.800, which
+discriminates; the k=10 row is retained only to show that it does not.
+
+**Lesson recorded.** An eval that reports a perfect score on its first run has
+almost certainly not been given anything to fail at. The first question to ask
+of a new metric is not "is the number good" but "what number would a broken
+implementation produce" — and if the answer is the same number, the metric is
+decorative. Publishing that 1.000 as an M3 baseline would have been the single
+most misleading thing in this repository.
