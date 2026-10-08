@@ -215,3 +215,157 @@ cases still answered, because the lexical half bypasses it. Reverted.
   answer text comes from a scripted synthesiser, so metrics 6–7 assess the
   report's deterministic assembly more than a real model's prose.
 - Judgments are mine, single-annotator. Annotator bias is unmeasured.
+
+---
+
+# Failure analysis — per metric
+
+What each metric means, how it is computed, why it can be trusted, and where
+it misleads. Figures are from `evaluation_baseline_d69164e.json`.
+
+## 1. retrieval_relevance — 0.833
+
+**Means:** did retrieval surface the documents annotated as relevant.
+**Computed:** recall@5, MRR and nDCG@5 against graded judgments (0/1/2), fused
+by averaging the three; `k=5` from `RETRIEVAL_K`. Cases with no annotated
+relevant document are *not scored* rather than scored zero.
+**Trustworthy because:** judgments were written before retrieval was tuned
+(G01–G10 reuse `retrieval_v1`), the corpus is fixed, and the holdout split is
+never used to make a change.
+
+**Where it misleads, and this matters.** The headline 0.833 reads as a
+retrieval weakness. It is not. All three misses are the fetch-failure cases:
+
+| Case | Condition | recall@5 |
+|---|---|---|
+| G12 | `all_fetch_fail` | 0.000 |
+| G13 | `access_restricted` | 0.000 |
+| G14 | `one_fetch_fail` | 0.000 |
+
+**On all 15 healthy cases, recall@5 is 1.000 with no exceptions.** A document
+that cannot be fetched cannot be retrieved, so scoring zero is defensible —
+but the single number conflates "retrieval ranked badly" with "the document
+was unreachable", and only the first is a retrieval problem. Read the
+condition breakdown, not the aggregate.
+
+This is also why the reverted improvement attempt (a dense similarity floor)
+was aimed at a non-weakness, and why the accepted cycle targeted
+`report_quality` instead.
+
+## 2. source_coverage — 1.000
+
+**Means:** fraction of annotated relevant sources the discovery stage found.
+**Computed:** `|discovered ∩ relevant| / |relevant|`, URL-matched.
+**Trustworthy because:** discovery runs against a fixed candidate list per
+case, sized to fit inside the 8-per-query cap (F-012).
+**Limitation:** at ceiling, so it currently detects regressions rather than
+discriminating between good and better. It also measures discovery against an
+*annotated* set, not against everything that exists.
+
+## 3. citation_correctness — 1.000 (57/57)
+
+**Means:** share of citations whose quote is genuinely at its recorded offsets.
+**Computed:** the evaluator re-slices the stored source text itself and
+compares, byte for byte.
+**Trustworthy because this is the one metric that cannot be gamed by the
+component under test.** It does **not** read `Claim.verified_citations` —
+trusting the pipeline's own verdict would make the metric a tautology, the
+verifier grading its own work. A test corrupts that field and asserts the
+metric is unmoved.
+**Limitation:** proves a quote is *present*, never that it is *true*, and not
+that the quote supports the claim built around it.
+
+## 4. unsupported_claim_rate — 0.000 (0/57)
+
+**Means:** share of claims carrying no verified citation. Lower is better, and
+`compare()` knows the direction.
+**Computed:** `claims with zero verified citations / total claims`.
+**Trustworthy because:** it counts against the independently re-verified
+citations from metric 3, not the pipeline's own flags.
+**Limitation:** 0.000 here is partly a property of the harness — the scripted
+synthesiser quotes real sentences. The live M5 run is the stronger evidence:
+30 claims, 16 supported, **14 marked UNKNOWN rather than dropped**. A real
+model produces unsupported claims; the system's job is to mark them, and it
+did.
+
+## 5. tool_selection — 1.000
+
+**Means:** did the run use the expected tools.
+**Computed:** expected vs actual tool set per case, exact match.
+**Limitation — the weakest metric by construction.** The pipeline is
+deterministic with exactly one model-driven step, so the tool set is nearly
+fixed and this is close to a tautology. It would catch a stage silently
+skipping its tool; it measures no real decision quality. Reported because
+architecture §9 names it, not because it discriminates.
+
+## 6. answer_relevance — 0.583 (6 cases) · non-deterministic
+
+**Means:** does the answer address the question, judged by Haiku against a
+written rubric (`rubric_v1`).
+**Computed:** one judge call per case, score 0–1.
+**Guards:** the judge never sees the system's own confidence or verdicts, so
+it cannot be anchored by them; the rubric explicitly credits an honest refusal
+so declining an unanswerable question is not punished.
+**Limitation:** 6 cases and a measured ±0.04 noise floor. Differences below
+~0.05 are noise. The answer text comes from a scripted synthesiser, so this
+scores the report's assembly more than a real model's prose.
+
+## 7. report_quality — 0.183 (6 cases) · non-deterministic · **weakest**
+
+**Means:** is the report honest and usable — judged on whether it distinguishes
+established from unestablished, names unanswered questions with reasons, gives
+run-specific rather than boilerplate limitations, and ties next steps to a
+stated gap.
+**Computed:** one judge call per case against `rubric_v1`.
+
+**This is the weakest component, and the diagnosis is concrete (F-014):** on a
+run where nothing failed, `limitations` collapsed to one boilerplate sentence
+and `next_steps` to one generic fallback, failing two of five rubric criteria
+outright — while the run held unused measured facts (on G02, all four
+supported claims uncorroborated, two at LOW confidence, six of eight sources
+unvetted).
+
+Per-case judged scores show the floor is uniform, not driven by an outlier:
+
+| Case | answer_relevance | report_quality |
+|---|---|---|
+| G01 | 0.25 | 0.15 |
+| G02 | 1.00 | 0.20 |
+| G03 | 0.75 | 0.15 |
+| G04 | 0.75 | 0.20 |
+| G05 | 0.50 | 0.20 |
+| G06 | 0.25 | 0.20 |
+
+The fix raised it to 0.208 — **inside the noise floor, so the improvement is
+not demonstrated.** See the improvement cycle above.
+
+## Deterministic vs not
+
+| Deterministic (1–5) | Non-deterministic (6–7) |
+|---|---|
+| Identical across five consecutive runs | ±0.04 measured on 6 cases |
+| Safe for regression gating | Not safe for gating; trend only |
+
+## Examples of failed cases
+
+- **G12 / G13 / G14** — relevant document annotated but unfetchable. Recall
+  0.000, and correctly so; `unknown_expectation_met` is true for all three,
+  meaning the system reported UNKNOWN as required.
+- **G11 / G19** — `unknown_expectation_accuracy` misses here (0.900 overall).
+  Both are out-of-domain questions with no relevant document, and both produce
+  supported claims anyway. **This is a harness artifact, not a system fault:**
+  the scripted extractor quotes a real sentence from whatever chunk it is
+  given, whereas the real extractor returns nothing for an irrelevant
+  question — measured live in M4. The honest reading is that these two cases
+  do not currently test what they were written to test.
+
+## What the weakest component is
+
+**`report_quality` (0.183)** — and unlike the judged answer metric, it is a
+property of deterministic M6 code rather than of a model, so it is fixable by
+engineering rather than by prompting. The attempted fix is documented, measured
+and *not* claimed as a win.
+
+The weakest *deterministic* signal is **`tool_selection`**, for the opposite
+reason: at 1.000 on a near-fixed tool set, it is close to a tautology and
+discriminates almost nothing.
