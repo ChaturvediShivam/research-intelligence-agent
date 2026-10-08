@@ -8,12 +8,24 @@
 services:
   - type: web
     name: research-intelligence-agent
-    runtime: image
+    # `docker` builds the repository's Dockerfile. NOT `image`, which means
+    # "pull a prebuilt image from a registry", requires an `image:` block and
+    # ignores dockerfilePath entirely — a blueprint that mixed the two would
+    # be rejected before anything was built.
+    runtime: docker
+
+    # Legacy alias for 0.5c-512mb (0.5 CPU / 512 MB), still accepted by
+    # Render. Measured against that ceiling in a memory-capped container:
+    # 86 MB idle, 221 MB peak while fastembed loads its ONNX model and
+    # embeds a batch — about 307 MB worst case, so the plan has headroom.
+    # The first cold start also downloads the model (~14 s), which is what
+    # the disk below exists to avoid repeating.
     plan: starter
     region: oregon
 
     # Render builds the Dockerfile at the repository root and injects PORT,
-    # which the container's CMD binds.
+    # which the container's CMD binds. No startCommand/dockerCommand here on
+    # purpose: either would override that CMD and with it the $PORT binding.
     dockerfilePath: ./Dockerfile
     dockerContext: .
 

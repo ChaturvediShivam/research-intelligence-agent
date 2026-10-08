@@ -102,7 +102,7 @@ claims.
 | 24 | Observability | `app/observability/trace.py` | `tests/integration/test_observability.py` — 24 trace assertions | ✅ M9 |
 | 25 | Cost & latency measurement | `app/llm/pricing.py`, `app/schemas/runs.py` | [`docs/cost-latency.md`](docs/cost-latency.md) — full-pipeline figures, measured/derived/unavailable | ✅ M9 |
 | 26 | Testing & CI | `tests/`, `.github/workflows/ci.yml` | CI green | ✅ M0 |
-| 27 | Deployment | `Dockerfile`, `render.yaml` | [`docs/deployment.md`](docs/deployment.md) — image builds and runs; **no live URL** | 🟡 M10 |
+| 27 | Deployment | `Dockerfile`, `render.yaml` | [`docs/deployment.md`](docs/deployment.md) — image builds and runs, fits the 512 MB plan; **no live URL** | 🟡 M10 |
 
 ## Build status
 

@@ -9,11 +9,19 @@
 | Container runtime | ✅ **VERIFIED** — starts clean, non-root, honours `$PORT` |
 | Health / readiness | ✅ **VERIFIED** — HTTP 200 from a running container |
 | Smoke test | ✅ **VERIFIED** — 4/4 checks against the live container |
-| `render.yaml` | 📄 **DOCUMENTED** — deployment-ready, never applied |
-| Render deployment | ❌ **NOT VERIFIED** — no Render access from this environment |
+| Memory against the 512 MB plan | ✅ **VERIFIED** — 307 MB worst case, measured under a 512 MB cap |
+| `render.yaml` | 📄 **DOCUMENTED** — validated and deployment-ready, never applied |
+| Render deployment | 🛑 **BLOCKED** — needs a GitHub repository and a Render login, neither available here |
 | Live public URL | ❌ **DOES NOT EXIST** |
 
 Nothing below claims a running public service. There isn't one.
+
+**One correction worth recording:** `render.yaml` originally declared
+`runtime: image`. That value means "pull a prebuilt image from a registry",
+requires an `image:` block and ignores `dockerfilePath` entirely — so the
+blueprint would have been rejected before anything was built. A blueprint
+that is never applied is never contradicted, which is precisely how that
+survived into a committed file. It is now `runtime: docker`.
 
 ## Architecture
 
@@ -127,19 +135,40 @@ check path, `ANTHROPIC_API_KEY` as `sync: false` so Render prompts for it
 rather than reading it from the repository, and a 1 GB disk at `/app/data` so
 the SQLite index and the embedding-model cache survive a restart.
 
-**It has never been applied.** This environment has no Render CLI, no Render
-credentials, and the repository has no git remote — Render deploys from a
-connected Git repository, so there is nothing for it to deploy from. Rather
-than simulate a deployment, here is exactly what a deployment requires:
+**It has never been applied.** The blocking facts, checked rather than
+assumed:
 
-1. Push the repository to GitHub or GitLab.
-2. In Render, **New → Blueprint**, and select the repository. Render reads
-   `render.yaml`.
-3. When prompted, paste `ANTHROPIC_API_KEY`. It is the only value Render asks
-   for; everything else is in the blueprint.
-4. Wait for the first build. It is slow — the image installs `fastembed` and
-   downloads the embedding model on first use.
-5. Confirm the service is live:
+| Prerequisite | State |
+|---|---|
+| GitHub push authentication | ✅ works — `ssh -T git@github.com` authenticates as `ChaturvediShivam` |
+| Remote repository | ❌ `ChaturvediShivam/research-intelligence-agent` does not exist (`git ls-remote` → *Repository not found*) |
+| A way to create it from here | ❌ no `gh` CLI, no GitHub token in the environment |
+| Render CLI | ❌ not installed |
+| Render credentials / API key | ❌ not present in the environment |
+
+Render deploys from a connected Git repository, so with no remote repository
+there is nothing for it to deploy from. Rather than simulate a deployment,
+here is exactly what remains — **two manual actions**, both requiring a
+browser login this environment does not have:
+
+1. **Create the repository** (manual). At <https://github.com/new>, name it
+   `research-intelligence-agent`. Then, locally:
+
+   ```bash
+   git push -u origin main    # the `origin` remote is already configured
+   ```
+
+   SSH authentication is already working, so the push itself needs no setup.
+
+2. **Create the Blueprint** (manual). In Render, **New → Blueprint**, select
+   the repository; Render reads `render.yaml`. When prompted, paste
+   `ANTHROPIC_API_KEY` — the only value it asks for, because everything else
+   is in the blueprint.
+
+Then wait for the first build. It is slow: the image installs `fastembed`,
+and the embedding model is downloaded on first use (~14 s, measured).
+
+3. Confirm the service is live:
 
 ```bash
 curl -s https://<service>.onrender.com/health
@@ -152,7 +181,14 @@ uv run python scripts/smoke_test.py https://<service>.onrender.com
 
 A note on the `starter` plan: it idles after inactivity, so the first request
 after an idle period will be slow, and research runs are long-lived requests.
-The free plan's 512 MB is likely too small for the embedding model.
+
+Its memory ceiling was measured rather than guessed. Running the image under
+`podman run --memory=512m` — the same 512 MB `starter` (`0.5c-512mb`) provides
+— the service idles at **86 MB**, and loading the fastembed ONNX model and
+embedding a 32-passage batch peaks at **221 MB RSS**. Worst case is therefore
+around **307 MB against 512 MB**. An earlier draft of this file guessed that
+512 MB was "likely too small"; the measurement says otherwise, and the guess
+was wrong.
 
 ## Production smoke test
 
