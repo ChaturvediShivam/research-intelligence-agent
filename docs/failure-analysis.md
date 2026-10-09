@@ -751,3 +751,82 @@ disk in `render.yaml` claimed that disk existed to prevent exactly that. It
 now points at `/app/data/fastembed`, verified writable by `appuser` on the
 mount. A download inside stage 4 is also a failure mode: it makes the stage
 depend on the Hub being reachable.
+
+## F-020 · Markdown bullet labels were reported as unsupported findings
+
+**Milestone:** M10, found by auditing the first successful production run
+
+**Symptom.** Production run `run_b133b116eb5f41b5` completed all eight stages
+and reported:
+
+```
+total_claims      20
+supported_claims   9
+unknown_claims    11
+```
+
+Read as research output that says 55% of the agent's claims were
+unsupported. All 11 carried the single failure code `no_citation`, and eight
+of them were not claims at all:
+
+```
+"- **Hardware share:**"
+"- **Drivers:**"
+"- **Growth across segments:**"
+"**The attached documents answer only a small part of this question.**"
+```
+
+**Cause.** `synthesise_sub_question` created one `Claim` per text block of the
+cited response, filtered only by `len(text) < 4`. A cited answer is not one
+block — the API splits it at citation boundaries, so cited sentences, uncited
+connective prose, markdown bullet labels and the model's own refusal each
+arrive as separate blocks. Every one became a claim, and every uncited one
+then failed verification with `no_citation`.
+
+The synthesis prompt made this certain rather than likely. It instructs: *"If
+the documents do not answer the question, say exactly that and cite
+nothing."* So the prompt asks for an uncited block and the parser converts
+that into an unsupported claim. Prompt and parser were in direct conflict,
+and the honest refusal the design wanted was recorded as a research failure.
+
+`SynthesisResult.cited_claims` already existed and expressed exactly the
+right filter. It was used in one log line and nowhere else.
+
+**Fix.** Only blocks carrying a citation become claims. A sub-question whose
+blocks are all uncited goes to `unanswered`, which stage 8 already reports as
+an information gap — the mechanism the refusal should have used from the
+start. `verify_claim`'s `no_citation` path is untouched: a `Claim`
+constructed without citations is still UNKNOWN, because that guarantee has to
+hold for any caller, not only for synthesis.
+
+**Why no test caught it.** Every offline fixture emitted one cited block per
+document, so the suite had never seen the shape the API actually returns.
+`unsupported_claim_rate` — the project's own metric 4 — therefore measured
+**0.000** across 18 golden cases while the deployed service measured **0.55**
+on the same code. Measured directly, with the harness emitting production's
+interleaved block shape:
+
+| | claims | unsupported | metric 4 |
+|---|---|---|---|
+| before the fix | 132 | 75 | **0.568** |
+| after the fix | 57 | 0 | **0.000** |
+
+0.568 against production's 0.55 is close enough to confirm the harness now
+reproduces the real failure. The harness emits that shape permanently now,
+and it leaves every committed baseline figure unchanged — the sensitivity
+cost nothing.
+
+**Worth noting.** This is the third instance of one pattern: F-012, F-017 and
+now F-020 were all tests and metrics that measured a population production
+never produces, and all three passed confidently while the real behaviour was
+wrong. F-017's lesson was to assert on a measured side effect rather than a
+status string. This one adds a second: **the fixture has to produce the shape
+the real API produces.** A fake that emits a tidier structure than reality
+does not test the parser, it tests the fake. The guard added here is that the
+offline evaluation now runs against the realistic shape, so a regression
+moves metric 4 instead of hiding behind it.
+
+**Not a verification defect.** Citation verification was correct throughout
+this run: 9 of 9 citations re-sliced and verified, no fabrication, no
+ungrounded figure, rejected-citation accounting self-consistent. The bug was
+upstream of the verifier, in deciding what counts as a claim.

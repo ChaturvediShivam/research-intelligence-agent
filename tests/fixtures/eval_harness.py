@@ -131,7 +131,18 @@ async def run_case(
         for doc_id in case.available_docs
     ]
 
-    llm = ScriptedLLM(plan=_plan_for(case), sub_question_ids=["SQ1"], discovery_turns=1)
+    # prose_blocks reproduces the interleaved cited/uncited text blocks the
+    # API actually returns. Without it the harness emitted one cited block
+    # per document, so unsupported_claim_rate measured 0.000 offline while
+    # the deployed service measured 0.55 on the same code (F-020). Verified
+    # to leave every committed baseline figure unchanged, so the sensitivity
+    # is free.
+    llm = ScriptedLLM(
+        plan=_plan_for(case),
+        sub_question_ids=["SQ1"],
+        discovery_turns=1,
+        prose_blocks=True,
+    )
     orchestrator = ResearchOrchestrator(
         client=LLMClient(settings, client=llm),
         provider=FakeSourceProvider(candidates),

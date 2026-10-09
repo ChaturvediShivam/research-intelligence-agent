@@ -224,6 +224,11 @@ class ScriptedLLM:
         extract_error: Exception | None = None,
         synthesis_error: Exception | None = None,
         fabricate_citations: bool = False,
+        # Interleave uncited prose blocks around the cited ones, which is the
+        # shape the API actually returns. Without this every fixture emitted
+        # one cited block per document and the suite never saw the real
+        # output — the gap that let F-020 ship.
+        prose_blocks: bool = False,
     ) -> None:
         self._plan = plan or make_plan()
         self._sub_question_ids = sub_question_ids or [sq.id for sq in self._plan.ordered()]
@@ -235,6 +240,7 @@ class ScriptedLLM:
         self._extract_error = extract_error
         self._synthesis_error = synthesis_error
         self._fabricate = fabricate_citations
+        self._prose_blocks = prose_blocks
 
         self.parse_calls: list[dict[str, Any]] = []
         self.create_calls: list[dict[str, Any]] = []
@@ -305,6 +311,11 @@ class ScriptedLLM:
             if isinstance(block, dict) and block.get("type") == "document"
         ]
         blocks: list[Any] = []
+        if self._prose_blocks:
+            # Verbatim shapes from the first production run.
+            blocks.append(
+                FakeTextBlock(text="**The attached documents answer only part of this.**")
+            )
         for index, document in enumerate(documents):
             text = document["source"]["data"]
             sentence = _first_sentence(text)
@@ -340,6 +351,8 @@ class ScriptedLLM:
                         ],
                     )
                 )
+            if self._prose_blocks:
+                blocks.append(FakeTextBlock(text="- **Drivers:**"))
         return FakeCreateResponse(content=blocks)
 
     def _tool_runner(self, **kwargs: Any) -> _FakeToolRunner:

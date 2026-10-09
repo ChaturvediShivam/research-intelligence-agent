@@ -13,6 +13,16 @@ Two properties make this stage safe rather than merely useful:
    synthesis promotes its own citation, which is a property of the types
    rather than a convention to remember.
 
+3. **Only cited blocks become claims.** A cited response is a sequence of
+   text blocks, and the API splits it at citation boundaries — so uncited
+   connective prose, markdown bullet labels (`- **Drivers:**`) and the
+   model's own "the documents do not answer this question" each arrive as
+   their own block. Turning every block into a `Claim` manufactured claims
+   that were never claims: the first production run reported 20 claims of
+   which 11 were UNKNOWN, and 8 of those 11 were formatting fragments
+   (F-020). A sub-question that yields no *cited* block is now routed to
+   `unanswered`, which stage 8 already reports as an information gap.
+
 Uses native document citations (ADR-001), so each claim arrives with character
 offsets that stage 7 re-checks independently. The call is deliberately not
 schema-constrained, because `output_config.format` and citations are mutually
@@ -42,7 +52,7 @@ from app.schemas.source import FetchedSource
 
 logger = structlog.get_logger(__name__)
 
-PROMPT_VERSION = "synthesize.v1"
+PROMPT_VERSION = "synthesize.v2"
 
 
 @dataclass(slots=True)
@@ -55,8 +65,22 @@ class SynthesisResult:
     # not support a statement" — different findings for a reader.
     unanswered: list[str] = field(default_factory=list)
 
+    # Uncited blocks that were not turned into claims, per sub-question.
+    # Counted rather than discarded silently: a sub-question whose only
+    # output was uncited prose is a real finding, and the count is how a
+    # reader of the logs can tell that from a sub-question that produced
+    # nothing at all.
+    declined: dict[str, int] = field(default_factory=dict)
+
     @property
     def cited_claims(self) -> list[Claim]:
+        """Claims carrying at least one citation.
+
+        Since the uncited-block filter landed this is every claim, and the
+        equality is asserted by a test. Kept as the explicit statement of
+        the invariant rather than deleted, because it is the property stage 7
+        depends on.
+        """
         return [c for c in self.claims if c.citations]
 
 
@@ -79,8 +103,13 @@ async def synthesise_sub_question(
     *,
     client: LLMClient,
     settings: Settings,
-) -> tuple[list[Claim], TokenUsage, float]:
-    """Produce cited claims for one sub-question."""
+) -> tuple[list[Claim], int, TokenUsage, float]:
+    """Produce cited claims for one sub-question.
+
+    Returns the claims, the number of uncited blocks declined, the usage and
+    the cost. Only blocks carrying a citation become claims; see the module
+    docstring for why.
+    """
     response = await request_cited_answer(
         client.client,
         model=settings.synthesis_model,
@@ -89,21 +118,45 @@ async def synthesise_sub_question(
             f"{question}\n\n"
             "Answer only from the attached documents. Write plain declarative "
             "sentences, each citing the passage it rests on. If the documents "
-            "do not answer the question, say exactly that and cite nothing."
+            "do not answer the question, say exactly that and cite nothing.\n\n"
+            "Where more than one of the attached documents bears on the same "
+            "point, cite each of them on that sentence, so the point carries "
+            "its corroboration. Two passages from the same publisher are one "
+            "source, not two — citing both does not make a point better "
+            "corroborated, and you must not present it as though it does. "
+            "Where a point rests on a single source and the other documents "
+            "neither confirm nor contradict it, say so in that sentence. "
+            "Never cite a document for a point it does not actually make."
         ),
     )
 
     blocks = parse_cited_response(list(response.content), source_ids_in_order(sources))
 
     claims: list[Claim] = []
-    for position, block in enumerate(blocks):
+    declined = 0
+    for block in blocks:
         text = block.text.strip()
         # Schema requires 4 characters; connective fragments are not claims.
         if len(text) < 4:
             continue
+        if not block.citations:
+            # Not a claim. The API splits a cited response at citation
+            # boundaries, so this is connective prose, a markdown bullet
+            # label, or the model saying the documents do not answer the
+            # question — which the instruction above explicitly asks for.
+            # Promoting it to a Claim produced an UNKNOWN/no_citation entry
+            # that misreported formatting as an unsupported finding (F-020).
+            declined += 1
+            logger.debug(
+                "synthesis_block_uncited",
+                sub_question_id=sub_question_id,
+                text=text[:200],
+            )
+            continue
         claims.append(
             Claim(
-                claim_id=f"{sub_question_id}_C{position}",
+                # Numbered over kept claims, so ids stay contiguous.
+                claim_id=f"{sub_question_id}_C{len(claims) + 1}",
                 sub_question_id=sub_question_id,
                 text=text,
                 citations=block.citations,
@@ -113,7 +166,7 @@ async def synthesise_sub_question(
         )
 
     usage = _usage_of(response)
-    return claims, usage, cost_usd(settings.synthesis_model, usage)
+    return claims, declined, usage, cost_usd(settings.synthesis_model, usage)
 
 
 async def run_synthesise_stage(
@@ -147,7 +200,7 @@ async def run_synthesise_stage(
             continue
 
         try:
-            claims, call_usage, call_cost = await synthesise_sub_question(
+            claims, declined, call_usage, call_cost = await synthesise_sub_question(
                 sub_question_id,
                 questions.get(sub_question_id, ""),
                 sources,
@@ -164,8 +217,15 @@ async def run_synthesise_stage(
         calls += 1
         usage = usage + call_usage
         cost += call_cost
+        if declined:
+            result.declined[sub_question_id] = declined
 
         if not claims:
+            # Verified evidence reached this sub-question but produced no
+            # cited statement. Stage 8 reports it as an information gap,
+            # which is the honest outcome — previously the model's own
+            # "the documents do not answer this question" was recorded as an
+            # unsupported claim instead.
             result.unanswered.append(sub_question_id)
         result.claims.extend(claims)
 
@@ -184,6 +244,7 @@ async def run_synthesise_stage(
         calls=calls,
         claims=len(result.claims),
         cited_claims=len(result.cited_claims),
+        declined_blocks=sum(result.declined.values()),
         unanswered=len(result.unanswered),
         cost_usd=metric.cost_usd,
         duration_ms=metric.duration_ms,
