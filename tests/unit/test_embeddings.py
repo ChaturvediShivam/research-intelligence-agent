@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
+from app.core.config import Settings
 from app.retrieval.embeddings import (
     BGE_QUERY_PREFIX,
+    DEFAULT_BATCH_SIZE,
     DEFAULT_DIMENSION,
     Embedder,
     FastEmbedEmbedder,
@@ -113,3 +117,89 @@ class TestTestDoubles:
         """A zero vector would make sqlite-vec report distance 0 for everything."""
         vector = TermOverlapEmbedder(["premium"]).embed_documents(["unrelated"])[0]
         assert any(c != 0.0 for c in vector)
+
+
+class RecordingModel:
+    """Stands in for fastembed's `TextEmbedding`, recording how it was called.
+
+    A fake rather than the real model on purpose: the thing under test is the
+    keyword argument that reaches `embed`, and loading 130 MB of ONNX to check
+    an integer would make the unit suite slow for no added confidence.
+    """
+
+    def __init__(self, dimension: int = DEFAULT_DIMENSION) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._dimension = dimension
+
+    def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
+        self.calls.append({"count": len(texts), **kwargs})
+        return [[1.0] + [0.0] * (self._dimension - 1) for _ in texts]
+
+
+class TestEmbeddingBatchIsBounded:
+    """F-019.
+
+    fastembed's default batch size is 256. Stage 4 embeds every chunk of
+    every source in one `embed_documents` call, and transformer attention
+    allocates activations proportional to batch x sequence^2 — so that
+    default asked ONNX for gigabytes and the kernel SIGKILLed the container
+    mid-stage on a 512 MB instance. No Python exception is raised by a
+    SIGKILL, so the background task vanished, nothing was logged, and the run
+    sat at `planning` forever.
+
+    These tests pin the bound. They cannot observe memory, so they assert the
+    one thing that caused it: the batch size actually handed to fastembed.
+    """
+
+    def test_batch_size_is_passed_to_fastembed(self) -> None:
+        embedder = FastEmbedEmbedder(batch_size=4)
+        embedder._model = RecordingModel()
+        embedder.embed_documents(["one", "two", "three"])
+        assert embedder._model.calls == [{"count": 3, "batch_size": 4}]
+
+    def test_the_default_is_never_fastembeds_own(self) -> None:
+        """256 is the value that OOM-killed production. Anything near it is a bug."""
+        assert DEFAULT_BATCH_SIZE == 4
+        embedder = FastEmbedEmbedder()
+        embedder._model = RecordingModel()
+        embedder.embed_documents(["one"])
+        assert embedder._model.calls[0]["batch_size"] == DEFAULT_BATCH_SIZE
+
+    def test_a_query_is_embedded_with_the_same_bound(self) -> None:
+        embedder = FastEmbedEmbedder(batch_size=2)
+        embedder._model = RecordingModel()
+        embedder.embed_query("what drove the change")
+        assert embedder._model.calls[0]["batch_size"] == 2
+
+    def test_batch_size_is_exposed(self) -> None:
+        assert FastEmbedEmbedder(batch_size=7).batch_size == 7
+        assert FastEmbedEmbedder().batch_size == DEFAULT_BATCH_SIZE
+
+    @pytest.mark.parametrize("bad", [0, -1])
+    def test_a_non_positive_batch_size_is_rejected(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="at least 1"):
+            FastEmbedEmbedder(batch_size=bad)
+
+    def test_settings_default_agrees_with_the_code_default(self) -> None:
+        """The two defaults are written separately so `core` need not import
+        `retrieval`. This is what stops them drifting apart."""
+        settings = Settings(_env_file=None)  # type: ignore[call-arg]
+        assert settings.embedding_batch_size == DEFAULT_BATCH_SIZE
+
+    @pytest.mark.parametrize("bad", [0, -3])
+    def test_settings_rejects_a_non_positive_batch_size(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="embedding_batch_size"):
+            Settings(_env_file=None, embedding_batch_size=bad)  # type: ignore[call-arg]
+
+    def test_the_configured_batch_size_reaches_the_embedder(self) -> None:
+        """The wiring, not just the default: a knob nothing reads is not a knob."""
+        from app.tools.registry import ToolContext
+
+        context = ToolContext(
+            settings=Settings(_env_file=None, embedding_batch_size=3)  # type: ignore[call-arg]
+        )
+        embedder = context.embedder
+        assert isinstance(embedder, FastEmbedEmbedder)
+        assert embedder.batch_size == 3
+        # Construction must still not have loaded the model.
+        assert embedder._model is None

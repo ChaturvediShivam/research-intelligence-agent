@@ -59,6 +59,11 @@ class Settings(BaseSettings):
 
     # --- Retrieval ---------------------------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # Chunks per ONNX forward pass. A memory bound set by the instance size,
+    # not a throughput preference: see DEFAULT_BATCH_SIZE in
+    # app/retrieval/embeddings.py for the measurements behind the default.
+    # Raise it only with headroom to spare; the default fits 512 MB.
+    embedding_batch_size: int = 4
     chunk_tokens: int = 512
     chunk_overlap_tokens: int = 64
     retrieval_top_k: int = 12
@@ -117,6 +122,13 @@ class Settings(BaseSettings):
     def _validate_cost_ceiling(cls, value: float) -> float:
         if value <= 0:
             raise ValueError("max_cost_usd_per_run must be greater than 0")
+        return value
+
+    @field_validator("embedding_batch_size")
+    @classmethod
+    def _batch_size_must_be_positive(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("embedding_batch_size must be at least 1")
         return value
 
     @field_validator("chunk_overlap_tokens")

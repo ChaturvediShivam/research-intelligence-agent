@@ -49,9 +49,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "zero cost."
         )
 
+    # Any run still mid-pipeline belongs to a process that no longer exists:
+    # this one has not started executing anything yet. Failing them here is
+    # what keeps "a run always reaches a terminal state" true across a
+    # restart, deploy or OOM kill (F-019).
+    repo: RunRepository = app.state.run_repository
+    interrupted = await repo.fail_interrupted()
+
     logger.info(
         "application_start",
         environment=settings.environment,
+        interrupted_runs_failed=len(interrupted),
         vector_backend=settings.vector_backend,
         anthropic_key_configured=settings.anthropic_api_key is not None,
         planning_model=settings.planning_model,
@@ -60,7 +68,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        repo: RunRepository = app.state.run_repository
         repo.close()
         client: LLMClient = app.state.llm_client
         await client.aclose()

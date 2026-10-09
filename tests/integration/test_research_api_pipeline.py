@@ -14,9 +14,12 @@ verifier re-sliced the stored source and agreed.
 
 from __future__ import annotations
 
+import asyncio
+import sqlite3
 from pathlib import Path
 
 import httpx
+import pytest
 import respx
 from fastapi.testclient import TestClient
 
@@ -27,6 +30,7 @@ from app.pipeline.orchestrator import ResearchOrchestrator, StageObserver
 from app.schemas.research import ResearchRequest, RunStatus
 from app.schemas.runs import StageOutcome
 from app.schemas.source import SourceCandidate
+from app.storage.runs import RunRepository
 from app.tools.fetch import SourceFetcher
 from app.tools.registry import ToolContext
 from tests.fixtures.fake_embedder import TermOverlapEmbedder
@@ -332,3 +336,251 @@ class TestOrchestratorContract:
         assert [stage for stage, _ in seen] == [outcome.stage.value for outcome in result.stages]
         assert ("report", "passed") in seen
         assert ("assess", "passed") in seen
+
+
+def record_statuses(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Capture every status written to the database, in order.
+
+    Asserting on the sequence rather than on a final value is the point: the
+    bug was that nothing at all was written between the opening `planning`
+    and the end of the run.
+    """
+    written: list[str] = []
+    original = RunRepository.set_status
+
+    async def recording(
+        self: RunRepository, run_id: str, status: RunStatus, *, error: str | None = None
+    ) -> None:
+        written.append(status.value)
+        await original(self, run_id, status, error=error)
+
+    monkeypatch.setattr(RunRepository, "set_status", recording)
+    return written
+
+
+class TestProgressIsPersisted:
+    """F-019.
+
+    `GET /research/{id}` reported `planning` with a null plan for the whole
+    of a four-minute run while the logs showed discovery and processing
+    completing. Nothing was wrong with the read path — nothing had been
+    written. The stage observer logged progress and persisted none of it.
+    """
+
+    @respx.mock
+    def test_intermediate_statuses_reach_the_database(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        mount_sources()
+        written = record_statuses(monkeypatch)
+        client, _ = build_client(api_settings(tmp_path))
+        with client as c:
+            submit(c)
+
+        assert written[0] == RunStatus.PLANNING.value
+        # The stages the logs showed, now persisted rather than only logged.
+        for status in (RunStatus.DISCOVERING, RunStatus.PROCESSING, RunStatus.RETRIEVING):
+            assert status.value in written, written
+
+    @respx.mock
+    def test_the_terminal_status_is_written_last(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A progress write landing after the verdict would resurrect the run.
+
+        Progress writes are scheduled, not awaited, so without the drain
+        before the final write this ordering is a race.
+        """
+        mount_sources()
+        written = record_statuses(monkeypatch)
+        client, _ = build_client(api_settings(tmp_path))
+        with client as c:
+            run_id = submit(c)
+            final = c.get(f"/research/{run_id}").json()
+
+        assert RunStatus(written[-1]).is_terminal, written
+        assert (
+            written.count(RunStatus.COMPLETED.value) + written.count(RunStatus.FAILED.value) == 1
+        ), f"the verdict must be written exactly once: {written}"
+        assert final["status"] == written[-1]
+
+    @respx.mock
+    def test_a_failed_run_also_records_where_it_got_to(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A run that fails at discovery must still show it planned."""
+        written = record_statuses(monkeypatch)
+        client, _ = build_client(api_settings(tmp_path), provider=FakeSourceProvider([]))
+        with client as c:
+            run_id = submit(c)
+            body = c.get(f"/research/{run_id}").json()
+
+        assert body["status"] == RunStatus.FAILED.value
+        assert body["error"].startswith("discover:")
+        assert written[0] == RunStatus.PLANNING.value
+        assert written[-1] == RunStatus.FAILED.value
+
+
+class TestAPartialStageDoesNotStrandTheRun:
+    """`stage_status=partial` on PROCESS is a recorded gap, not a halt.
+
+    The production logs stopped at a PARTIAL process stage, which made the
+    stage status look like the cause. It was not — PARTIAL continues. This
+    pins that, so the next investigation does not re-examine it.
+    """
+
+    @respx.mock
+    def test_one_unreachable_source_still_produces_a_report(self, tmp_path: Path) -> None:
+        respx.get(FCA_URL).mock(
+            return_value=httpx.Response(200, html=FCA_HTML, headers={"content-type": "text/html"})
+        )
+        respx.get(ABI_URL).mock(return_value=httpx.Response(404))
+
+        client, _ = build_client(api_settings(tmp_path))
+        with client as c:
+            run_id = submit(c)
+            body = c.get(f"/research/{run_id}").json()
+
+        assert RunStatus(body["status"]).is_terminal, body["status"]
+        # The run went past PROCESS: stages after it were measured.
+        reached = {stage["stage"] for stage in body["stages"]}
+        assert "retrieve" in reached, reached
+        assert body["report"] is not None
+        # And the failed source is accounted for rather than hidden.
+        assert body["sources"]["failed"] >= 1
+
+
+class TestInterruptedRunsAreFailedOnStartup:
+    """The guarantee the in-process handler cannot make.
+
+    A SIGKILL runs no `except` block. These assert through the real lifespan,
+    because the reap has to be wired into startup to be worth anything.
+    """
+
+    def test_a_run_stranded_by_a_dead_process_is_failed_on_the_next_boot(
+        self, tmp_path: Path
+    ) -> None:
+        settings = api_settings(tmp_path)
+
+        # A run left mid-pipeline, exactly as an OOM kill leaves one.
+        orphan = RunRepository(settings.database_path)
+        run = asyncio.run(orphan.create(ResearchRequest(question=QUESTION)))
+        asyncio.run(orphan.set_status(run.id, RunStatus.PROCESSING))
+        orphan.close()
+
+        client, _ = build_client(settings)
+        with client as c:
+            body = c.get(f"/research/{run.id}").json()
+
+        assert body["status"] == RunStatus.FAILED.value
+        assert "interrupted" in body["error"]
+        assert "processing" in body["error"]
+
+    @respx.mock
+    def test_a_completed_run_is_not_disturbed_by_a_restart(self, tmp_path: Path) -> None:
+        """The reap must not touch finished work on the mounted disk."""
+        mount_sources()
+        settings = api_settings(tmp_path)
+        client, _ = build_client(settings)
+        with client as c:
+            run_id = submit(c)
+            before = c.get(f"/research/{run_id}").json()
+        assert before["status"] == RunStatus.COMPLETED.value
+
+        restarted, _ = build_client(settings)
+        with restarted as c:
+            after = c.get(f"/research/{run_id}").json()
+
+        assert after["status"] == RunStatus.COMPLETED.value
+        assert after["error"] is None
+        assert after["report"] is not None
+
+
+class TestExceptionsAreNeverLost:
+    """A run that raises must end up FAILED in the database, with a reason.
+
+    Two paths, kept apart: a stage raising inside the orchestrator (which
+    returns a FAILED result), and the route's own persistence failing (which
+    must not be able to resurrect or strand the run).
+    """
+
+    @respx.mock
+    def test_a_raising_stage_is_persisted_as_failed(self, tmp_path: Path) -> None:
+        mount_sources()
+        client, _ = build_client(
+            api_settings(tmp_path),
+            llm=ScriptedLLM(
+                plan=make_plan(("SQ1", "SQ2")),
+                plan_error=RuntimeError("the planner exploded"),
+            ),
+        )
+        with client as c:
+            run_id = submit(c)
+            body = c.get(f"/research/{run_id}").json()
+
+        assert body["status"] == RunStatus.FAILED.value
+        assert body["error"], "a failed run must say why"
+        assert body["error"].startswith("plan:")
+        # Every later stage is recorded as skipped with the run already
+        # FAILED, so the observer must not write any of them as progress.
+        assert body["status"] == RunStatus.FAILED.value
+
+    @respx.mock
+    def test_a_failed_progress_write_does_not_change_the_verdict(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Progress is best-effort; the orchestrator's verdict is not.
+
+        Progress writes are scheduled and not awaited, so an exception in one
+        would otherwise surface at the `gather` and be mistaken for a
+        pipeline failure.
+        """
+        mount_sources()
+        original = RunRepository.set_status
+        failed_writes: list[str] = []
+
+        async def flaky(
+            self: RunRepository, run_id: str, status: RunStatus, *, error: str | None = None
+        ) -> None:
+            # Fail every progress write, let the terminal verdict through.
+            if not status.is_terminal and status is not RunStatus.PLANNING:
+                failed_writes.append(status.value)
+                raise sqlite3.OperationalError("database is locked")
+            await original(self, run_id, status, error=error)
+
+        monkeypatch.setattr(RunRepository, "set_status", flaky)
+        client, _ = build_client(api_settings(tmp_path))
+        with client as c:
+            run_id = submit(c)
+            body = c.get(f"/research/{run_id}").json()
+
+        assert failed_writes, "the test did not exercise the failure path"
+        assert body["status"] == RunStatus.COMPLETED.value
+        assert body["error"] is None
+        assert body["report"] is not None
+
+    @respx.mock
+    def test_a_persistence_failure_still_leaves_the_run_terminal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The route's own last-resort handler.
+
+        The orchestrator never raises — it catches everything and returns a
+        FAILED result — so this handler can only be reached by one of the
+        route's own writes failing. That is exactly when it matters: a run
+        left non-terminal here is a run stranded until the next restart.
+        """
+
+        async def boom(self: RunRepository, run_id: str, report: object) -> None:
+            raise sqlite3.OperationalError("disk I/O error")
+
+        monkeypatch.setattr(RunRepository, "save_report", boom)
+        client, _ = build_client(api_settings(tmp_path))
+        with client as c:
+            run_id = submit(c)
+            body = c.get(f"/research/{run_id}").json()
+
+        assert body["status"] == RunStatus.FAILED.value
+        # Generic on purpose: the sqlite message must not reach the caller.
+        assert body["error"] == "Internal pipeline error."
+        assert "disk I/O" not in (body["error"] or "")

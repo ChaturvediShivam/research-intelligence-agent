@@ -87,7 +87,7 @@ class ToolContext:
     @property
     def embedder(self) -> Embedder:
         if self._embedder is None:
-            self._embedder = FastEmbedEmbedder()
+            self._embedder = FastEmbedEmbedder(batch_size=self.settings.embedding_batch_size)
         return self._embedder
 
     async def aclose(self) -> None:

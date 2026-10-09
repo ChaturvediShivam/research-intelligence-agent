@@ -181,3 +181,95 @@ class TestReportPersistence:
                 await repo.save_report("run_doesnotexist0001", _report("run_doesnotexist0001"))
         finally:
             repo.close()
+
+
+class TestInterruptedRunsAreReaped:
+    """F-019.
+
+    The pipeline runs in a `BackgroundTask` inside the API process. A SIGKILL
+    — an OOM, a deploy, a restart — takes the task with it and runs no
+    exception handler, so the run keeps its last persisted status forever. The
+    in-process `try/except` cannot cover that case; only startup can.
+    """
+
+    async def test_a_non_terminal_run_is_failed_at_startup(self, tmp_path: Path) -> None:
+        path = tmp_path / "runs.db"
+        repo = RunRepository(path)
+        run = await repo.create(ResearchRequest(question=QUESTION))
+        await repo.set_status(run.id, RunStatus.PROCESSING)
+        repo.close()
+
+        # A second repository stands in for the restarted process.
+        restarted = RunRepository(path)
+        assert await restarted.fail_interrupted() == [run.id]
+        reaped = await restarted.get(run.id)
+        assert reaped.status is RunStatus.FAILED
+        # The status it died at is the only record of how far it got, so it
+        # has to survive into the message.
+        assert "processing" in (reaped.error or "")
+        restarted.close()
+
+    @pytest.mark.parametrize(
+        "status",
+        [RunStatus.PENDING, RunStatus.PLANNING, RunStatus.DISCOVERING, RunStatus.SYNTHESISING],
+    )
+    async def test_every_non_terminal_status_is_reaped(
+        self, tmp_path: Path, status: RunStatus
+    ) -> None:
+        """Parameterised over the enum so a new status cannot be forgotten."""
+        assert not status.is_terminal
+        repo = RunRepository(tmp_path / f"{status.value}.db")
+        run = await repo.create(ResearchRequest(question=QUESTION))
+        await repo.set_status(run.id, status)
+        assert await repo.fail_interrupted() == [run.id]
+        assert (await repo.get(run.id)).status is RunStatus.FAILED
+        repo.close()
+
+    @pytest.mark.parametrize("status", [RunStatus.COMPLETED, RunStatus.FAILED])
+    async def test_a_terminal_run_is_left_alone(self, tmp_path: Path, status: RunStatus) -> None:
+        """A finished run must not have its error or status rewritten."""
+        repo = RunRepository(tmp_path / f"{status.value}.db")
+        run = await repo.create(ResearchRequest(question=QUESTION))
+        await repo.set_status(run.id, status, error="original")
+        assert await repo.fail_interrupted() == []
+        after = await repo.get(run.id)
+        assert after.status is status
+        assert after.error == "original"
+        repo.close()
+
+    async def test_reaping_is_idempotent_and_quiet_when_there_is_nothing_to_do(
+        self, tmp_path: Path
+    ) -> None:
+        """It runs on every startup, including the ones with no stranded runs."""
+        repo = RunRepository(tmp_path / "runs.db")
+        assert await repo.fail_interrupted() == []
+        run = await repo.create(ResearchRequest(question=QUESTION))
+        await repo.set_status(run.id, RunStatus.RETRIEVING)
+        assert await repo.fail_interrupted() == [run.id]
+        assert await repo.fail_interrupted() == []
+        repo.close()
+
+    async def test_a_completed_run_survives_alongside_a_stranded_one(self, tmp_path: Path) -> None:
+        """The reap is a filtered UPDATE; this is what pins the filter."""
+        repo = RunRepository(tmp_path / "runs.db")
+        done = await repo.create(ResearchRequest(question=QUESTION))
+        stuck = await repo.create(ResearchRequest(question=QUESTION))
+        await repo.set_status(done.id, RunStatus.COMPLETED)
+        await repo.set_status(stuck.id, RunStatus.EXTRACTING)
+        assert await repo.fail_interrupted() == [stuck.id]
+        assert (await repo.get(done.id)).status is RunStatus.COMPLETED
+        assert (await repo.get(stuck.id)).status is RunStatus.FAILED
+        repo.close()
+
+    async def test_the_reaped_status_survives_a_reopen(self, tmp_path: Path) -> None:
+        """Committed, not just held in the connection."""
+        path = tmp_path / "runs.db"
+        repo = RunRepository(path)
+        run = await repo.create(ResearchRequest(question=QUESTION))
+        await repo.set_status(run.id, RunStatus.VALIDATING)
+        await repo.fail_interrupted()
+        repo.close()
+
+        reopened = RunRepository(path)
+        assert (await reopened.get(run.id)).status is RunStatus.FAILED
+        reopened.close()

@@ -76,6 +76,57 @@ class RunRepository:
         if cursor.rowcount == 0:
             raise NotFoundError(f"Run {run_id!r} does not exist.", details={"run_id": run_id})
 
+    async def fail_interrupted(self) -> list[str]:
+        """Mark every non-terminal run as failed. Call once, at startup.
+
+        A run executes in a `BackgroundTask` inside this process. If the
+        process dies mid-run — a deploy, a restart, an OOM kill — the task
+        dies with it, no exception handler runs, and the run keeps whatever
+        status it last persisted. It then sits there forever, which over HTTP
+        is indistinguishable from a run still working (F-019).
+
+        This is the only thing that makes "a run always reaches a terminal
+        state" true across a process boundary; the `try/except` in the route
+        can only promise it while the process lives.
+
+        Correct because the service is single-process and single-instance: a
+        non-terminal run at startup is, by definition, not one this process
+        is executing. Running a second instance or uvicorn `--workers`
+        against the same database would break that and fail live runs.
+        """
+        stranded = await asyncio.to_thread(self._fail_interrupted)
+        for run_id in stranded:
+            logger.warning("run_interrupted", run_id=run_id, status=RunStatus.FAILED.value)
+        return stranded
+
+    def _fail_interrupted(self) -> list[str]:
+        terminal = [status.value for status in RunStatus if status.is_terminal]
+        placeholders = ",".join("?" * len(terminal))
+        with self._conn:
+            rows = self._conn.execute(
+                f"SELECT id, status FROM runs WHERE status NOT IN ({placeholders})",  # noqa: S608
+                terminal,
+            ).fetchall()
+            if not rows:
+                return []
+            run_ids = [str(row["id"]) for row in rows]
+            # The status the run died at goes into the message: it is the only
+            # surviving record of how far the killed run actually got.
+            self._conn.executemany(
+                "UPDATE runs SET status = ?, error = ?, updated_at = ? WHERE id = ?",
+                [
+                    (
+                        RunStatus.FAILED.value,
+                        f"Run was interrupted while {row['status']}; the process "
+                        "did not survive to finish it.",
+                        _now(),
+                        str(row["id"]),
+                    )
+                    for row in rows
+                ],
+            )
+        return run_ids
+
     async def save_plan(self, run_id: str, plan: ResearchPlan) -> None:
         async with self._write_lock:
             await asyncio.to_thread(self._update_plan, run_id, plan)

@@ -13,6 +13,8 @@ plan-only run was indistinguishable over HTTP from a finished one (F-017).
 
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 from fastapi import APIRouter, BackgroundTasks, status
 from pydantic import BaseModel
@@ -200,11 +202,30 @@ async def _execute_pipeline(
     # it from settings; a copy keeps one request from mutating app-wide state.
     run_settings = settings.model_copy(update={"max_sources_per_run": request.max_sources})
 
-    def observe(outcome: StageOutcome, run_status: RunStatus) -> None:
-        """Emit per-stage progress so a long run is diagnosable from logs.
+    # Every progress write scheduled by this run. Awaited before the terminal
+    # status is written, so a late one cannot land on top of it.
+    #
+    # Completed tasks are deliberately kept rather than discarded in a done
+    # callback: discarding them emptied this list before the drain could
+    # retrieve their exceptions, which sent a failed write to asyncio's
+    # default handler instead of the log. Bounded by the stage count.
+    progress: list[asyncio.Task[None]] = []
 
-        Without this, a 160-second run logs nothing between start and finish,
-        and production logs are the only place it can be observed.
+    def observe(outcome: StageOutcome, run_status: RunStatus) -> None:
+        """Record per-stage progress, to the log and to the run row.
+
+        Persisting here is what makes `GET /research/{id}` agree with the
+        logs. Previously nothing was written between the initial `planning`
+        and the end of the run, so a caller polling a four-minute run saw
+        `planning` with a null plan the entire time while the logs showed
+        discovery and processing completing — and a run whose process was
+        killed kept `planning` forever (F-019).
+
+        The observer is synchronous because the orchestrator must not be
+        slowed or failed by it, so the write is scheduled rather than
+        awaited. `run_status` is the status of the stage that just finished,
+        which is exactly what a diagnosis needs: the last stage a killed run
+        got through.
         """
         logger.info(
             "run_stage",
@@ -216,6 +237,28 @@ async def _execute_pipeline(
             cost_usd=outcome.metric.cost_usd if outcome.metric else 0.0,
             errors=outcome.errors or None,
         )
+        # The terminal status is written once, below, from the orchestrator's
+        # verdict — never from a progress event.
+        if run_status.is_terminal:
+            return
+        progress.append(asyncio.create_task(repo.set_status(run_id, run_status)))
+
+    async def drain_progress() -> None:
+        """Let scheduled progress writes finish before the final status.
+
+        A failed progress write is logged and otherwise ignored: losing a
+        status update is not a research failure, and raising here would
+        replace the orchestrator's verdict with a persistence error.
+        """
+        if not progress:
+            return
+        for outcome in await asyncio.gather(*progress, return_exceptions=True):
+            if isinstance(outcome, BaseException):
+                logger.warning(
+                    "run_progress_write_failed",
+                    run_id=run_id,
+                    exc_type=type(outcome).__name__,
+                )
 
     orchestrator = ResearchOrchestrator(
         client=client,
@@ -236,12 +279,15 @@ async def _execute_pipeline(
         if result.report is not None:
             await repo.save_report(run_id, result.report)
         await repo.save_trace(run_id, result.trace)
+        await drain_progress()
         # The orchestrator's own verdict. Never hard-coded: a run that failed
         # at discovery must not report the same status as one that finished.
         await repo.set_status(run_id, result.status, error=result.error)
     except PipelineStageError as exc:
         logger.warning("pipeline_stage_failed", run_id=run_id, stage=exc.stage)
+        await drain_progress()
         await repo.set_status(run_id, RunStatus.FAILED, error=f"{exc.stage}: {exc.message}")
     except Exception as exc:  # noqa: BLE001 - see docstring
         logger.exception("pipeline_failed", run_id=run_id, exc_type=type(exc).__name__)
+        await drain_progress()
         await repo.set_status(run_id, RunStatus.FAILED, error="Internal pipeline error.")

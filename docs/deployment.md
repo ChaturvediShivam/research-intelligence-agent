@@ -9,7 +9,7 @@
 | Container runtime | ✅ **VERIFIED** — starts clean, non-root, honours `$PORT` |
 | Health / readiness | ✅ **VERIFIED** — HTTP 200 from a running container |
 | Smoke test | ✅ **VERIFIED** — 4/4 checks against the live container |
-| Memory against the 512 MB plan | ✅ **VERIFIED** — 307 MB worst case, measured under a 512 MB cap |
+| Memory against the 512 MB plan | ✅ **VERIFIED** — 351 MB peak through the real stage 4, measured under a 512 MB cap, flat in chunk count (was OOM-killed before F-019) |
 | `render.yaml` | 📄 **DOCUMENTED** — validated and deployment-ready, never applied |
 | Render deployment | 🛑 **BLOCKED** — needs a GitHub repository and a Render login, neither available here |
 | Live public URL | ❌ **DOES NOT EXIST** |
@@ -183,13 +183,67 @@ uv run python scripts/smoke_test.py https://<service>.onrender.com
 A note on the `starter` plan: it idles after inactivity, so the first request
 after an idle period will be slow, and research runs are long-lived requests.
 
-Its memory ceiling was measured rather than guessed. Running the image under
-`podman run --memory=512m` — the same 512 MB `starter` (`0.5c-512mb`) provides
-— the service idles at **86 MB**, and loading the fastembed ONNX model and
-embedding a 32-passage batch peaks at **221 MB RSS**. Worst case is therefore
-around **307 MB against 512 MB**. An earlier draft of this file guessed that
-512 MB was "likely too small"; the measurement says otherwise, and the guess
-was wrong.
+### Memory
+
+Measured under `podman run --memory=512m` — the same 512 MB the `starter`
+plan (`0.5c-512mb`) provides — driving the **real `run_retrieve_stage`**:
+
+| | RSS |
+|---|---|
+| Interpreter and imports | 86 MB |
+| ONNX session loaded | 237 MB |
+| Peak, 250 chunks embedded | 341 MB |
+| Peak, 1000 chunks embedded | 351 MB |
+
+Peak is **flat in chunk count**, which is the property that matters: chunk
+count follows source length and is unbounded, so memory must not scale with
+it. That flatness comes from `EMBEDDING_BATCH_SIZE`, and it is the whole
+reason the plan fits.
+
+**This file previously claimed 221 MB peak and "307 MB worst case". That was
+wrong, and wrong in the direction that hid a production outage.** The figure
+was taken embedding a 32-passage batch, which no real run ever does: stage 4
+embeds every chunk of every source in one call. At the batch size that
+shipped, 250 chunks OOM-killed a 512 MB container — and OOM-killed a 1 GB
+one. Every real research run died in stage 4 with no error, because a
+`SIGKILL` raises nothing. See F-019 in
+[`docs/failure-analysis.md`](failure-analysis.md).
+
+Raising the instance size is therefore two edits, not one: the plan **and**
+`EMBEDDING_BATCH_SIZE`. Leaving the batch size alone is always safe; raising
+it without headroom is what caused the outage.
+
+Latency is the cost of that headroom. On the measurement host, 1000 chunks
+took 86 s to embed. Render's `starter` plan provides 0.5 CPU, so expect
+materially longer there, and stage 4 has no timeout.
+
+### Model cache
+
+`FASTEMBED_CACHE_PATH=/app/data/fastembed` puts the embedding model on the
+persistent disk. Without it fastembed falls back to
+`tempfile.gettempdir()` and re-downloads the model from the HuggingFace Hub
+on every cold start — which also makes stage 4 fail whenever the Hub is
+unreachable. Verified writable by `appuser` (uid 10001) on the mount.
+
+### Interrupted runs
+
+A research run executes in a `BackgroundTask` inside the API process, so a
+deploy, restart or OOM kill takes it with it and runs no exception handler.
+On startup the service fails every run left in a non-terminal state:
+
+```
+{"event": "run_interrupted", "run_id": "run_...", "status": "failed"}
+{"event": "application_start", "interrupted_runs_failed": 1, ...}
+```
+
+The run then reports `failed` with *"Run was interrupted while planning; the
+process did not survive to finish it."* — naming the stage it died at.
+
+This is correct **only** because the service is single-process and
+single-instance. Do not set uvicorn `--workers`, and do not scale this
+service past one instance, without replacing the reaper with something that
+can tell a dead process's runs from a live one's — otherwise startup will
+fail runs that are still executing elsewhere.
 
 ## SEC EDGAR access
 

@@ -15,11 +15,17 @@ services:
     runtime: docker
 
     # Legacy alias for 0.5c-512mb (0.5 CPU / 512 MB), still accepted by
-    # Render. Measured against that ceiling in a memory-capped container:
-    # 86 MB idle, 221 MB peak while fastembed loads its ONNX model and
-    # embeds a batch — about 307 MB worst case, so the plan has headroom.
-    # The first cold start also downloads the model (~14 s), which is what
-    # the disk below exists to avoid repeating.
+    # Render. Re-measured in a 512 MB container after F-019, because the
+    # earlier figure here (221 MB peak) was taken embedding a trivially small
+    # batch and was not representative of a real run:
+    #
+    #   86 MB   interpreter and imports
+    #  237 MB   ONNX session loaded
+    #  351 MB   peak through the real stage 4, 1000 chunks, batch size 4
+    #
+    # The earlier default batch size of 256 OOM-killed this plan on every
+    # real run, and also OOM-killed a 1 GB ceiling. Peak is now flat in chunk
+    # count; see DEFAULT_BATCH_SIZE in app/retrieval/embeddings.py.
     plan: starter
     region: oregon
 
@@ -61,9 +67,26 @@ services:
       - key: MAX_SOURCES_PER_RUN
         value: "8"
 
-    # SQLite and the embedding model cache live on disk. Without this the
-    # chunk index and the downloaded fastembed model are lost on every
-    # restart, which works but re-downloads the model on each cold start.
+      # Chunks per ONNX forward pass — a memory bound tied to the plan above,
+      # not a throughput setting. Set explicitly so that raising the instance
+      # size is a visible, deliberate pair of edits rather than a silent
+      # inheritance of whatever the code default happens to be.
+      - key: EMBEDDING_BATCH_SIZE
+        value: "4"
+
+      # Put the fastembed model cache on the persistent disk. Without this
+      # fastembed falls back to tempfile.gettempdir(), so the model was
+      # re-downloaded from the HF Hub on every cold start — which the disk
+      # comment below already claimed was not happening. A download inside
+      # stage 4 also makes the stage fail when the Hub is unreachable.
+      - key: FASTEMBED_CACHE_PATH
+        value: /app/data/fastembed
+
+    # SQLite and the embedding model cache live on disk. The run database is
+    # the reason this is a disk and not ephemeral storage: a research run
+    # costs real money, and losing one to a restart loses that spend.
+    # FASTEMBED_CACHE_PATH above points the model cache here too, so a cold
+    # start no longer re-downloads it.
     disk:
       name: data
       mountPath: /app/data

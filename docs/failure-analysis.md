@@ -640,3 +640,114 @@ documented design (`Unsupported content type 'application/pdf'`). Both are
 real capability limits for a due-diligence agent whose preferred sources are
 regulatory filings, and both are recorded in docs/deployment.md rather than
 fixed here.
+
+## F-019 · An OOM kill looked exactly like a slow run
+
+**Milestone:** M10, found by investigating a production run that never finished
+
+**Symptom.** `GET /research/run_b1c8bb35235c4275` returned, and kept
+returning indefinitely:
+
+```json
+{"status": "planning", "plan": null, "report": null,
+ "sources": null, "citations": [], "stages": [], "error": null, "cost": null}
+```
+
+while the Render logs for the *same* run showed `plan` passed (26.3 s),
+`discover` passed (33.3 s) and `process` partial (14.0 s) — then stopped.
+No `run_complete`, no `run_failed`, no `pipeline_failed`, no traceback.
+Anthropic's logs showed HTTP 200 throughout. The API and the logs appeared
+to contradict each other, and the PARTIAL process stage looked like the
+cause.
+
+**Cause — three defects, one visible symptom.**
+
+*1. The pipeline was OOM-killed in stage 4, and this is the actual cause.*
+`FastEmbedEmbedder.embed_documents` called `model.embed(texts)` without
+`batch_size`, so fastembed applied its own default of **256**. Stage 4
+embeds every chunk of every source in a single call, and transformer
+attention allocates activations proportional to *batch × sequence²* — at
+512-token chunks that asks ONNX for gigabytes at once. Measured in a 512 MB
+container, which is the Render plan the service runs on:
+
+| chunks | batch | peak RSS |
+|---|---|---|
+| 250 | 256 (shipped default) | **OOM-killed** — also OOM at a 1 GB ceiling |
+| 250 | 16 | **OOM-killed** |
+| 250 | 8 | 409 MB |
+| 250 | 4 | 322 MB |
+| 1000 | 4 | 317 MB |
+
+A real run produces hundreds of chunks (one earlier live run produced 248),
+so **every** real run was killed in stage 4. A `SIGKILL` from the kernel runs
+no `except` block, no `finally`, and no log handler, which is precisely why
+the logs end mid-pipeline with no error: there was no exception to catch.
+The container restarted, `/health` went green, and the service looked fine.
+
+*2. Nothing was persisted between the first status write and the end of the
+run.* The route wrote `planning`, ran the orchestrator, and only then wrote
+the plan, report, trace and final status. The orchestrator does advance
+`result.status` through `discovering`, `processing` and so on, and passes it
+to the stage observer — which **logged it and persisted nothing**. So the API
+was not stale or reading a different database; it was reporting the last
+thing anybody had written. That is the whole of the apparent contradiction,
+and it is why a four-minute run was indistinguishable from a stuck one.
+
+*3. Nothing reconciled a run whose process had died.* The route's
+`try/except` guarantees a terminal state only while the process lives. After
+a `SIGKILL` the run kept `planning` forever — and over HTTP a stranded run
+and a working one are the same response.
+
+**Fix.** Three changes, matching the three defects:
+
+- `DEFAULT_BATCH_SIZE = 4` in `app/retrieval/embeddings.py`, passed
+  explicitly to `embed`, configurable as `EMBEDDING_BATCH_SIZE`. Peak memory
+  is now **flat in chunk count** — 341 MB at 250 chunks and 351 MB at 1000,
+  measured through the real `run_retrieve_stage` in a 512 MB container. That
+  flatness is the property that matters: chunk count follows source length
+  and is unbounded, so memory must not scale with it.
+- The stage observer now persists each stage's status, so `GET` reflects the
+  stage actually reached. Writes are scheduled (the observer must not block
+  the orchestrator) and drained before the terminal status, so a late
+  progress write cannot land on top of the verdict.
+- `RunRepository.fail_interrupted()`, called once from the lifespan on
+  startup, fails every non-terminal run. This is the only thing that makes
+  "a run always reaches a terminal state" true across a process boundary.
+  It is correct *because* the service is single-process and single-instance:
+  a non-terminal run at startup cannot be one this process is executing.
+  Running a second instance, or uvicorn `--workers`, against one database
+  would break that and fail live runs.
+
+**Verified** by SIGKILLing a container holding a `planning` run and
+restarting it: the run came back `failed` with *"Run was interrupted while
+planning; the process did not survive to finish it."*
+
+**Not the cause, despite appearances.** `stage_status=partial` on PROCESS is
+a recorded gap, not a halt — the orchestrator only stops when
+`processed.sources` is *empty*. PARTIAL meant "some sources fetched, some
+failed", the run continued into stage 4 exactly as designed, and that is
+where it died. A test now pins this so the next investigation does not spend
+time on it. Also ruled out, and all of them wrong: stale repository objects,
+two databases, a relative `database_path` resolving differently, a swallowed
+exception, and the API reading in-memory state. The earlier migration
+evidence already disproved the database theories — a run persisted before a
+redeploy survived it, which only happens if the mounted disk and the path
+are both right.
+
+**Worth noting.** The memory figure previously recorded in `render.yaml` and
+`docs/deployment.md` — "221 MB peak while fastembed loads its ONNX model and
+embeds a batch" — was measured embedding a trivially small batch. It was a
+real measurement of the wrong thing, and it is what made a 512 MB plan look
+like it had headroom. The lesson is the same one as F-012 and F-017: the
+measurement has to exercise the production path at production scale, or it
+certifies something nobody is going to run. The ONNX session alone costs
+~150 MB on top of an 86 MB interpreter, which no measurement here had
+isolated before.
+
+**Also fixed, same area.** `FASTEMBED_CACHE_PATH` was never set, so fastembed
+fell back to `tempfile.gettempdir()` and re-downloaded the model from the
+HuggingFace Hub on every cold start — while the comment on the persistent
+disk in `render.yaml` claimed that disk existed to prevent exactly that. It
+now points at `/app/data/fastembed`, verified writable by `appuser` on the
+mount. A download inside stage 4 is also a failure mode: it makes the stage
+depend on the Hub being reachable.
