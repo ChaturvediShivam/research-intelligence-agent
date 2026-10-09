@@ -32,7 +32,7 @@ from app.core.security import (
 )
 from app.llm.citations import CITED_SYSTEM, build_document_blocks
 from app.llm.client import LLMClient
-from app.llm.context import frame_untrusted, load_prompt, strip_fence_markers
+from app.llm.context import PROMPT_DIR, frame_untrusted, load_prompt, strip_fence_markers
 from app.observability.trace import build_trace
 from app.pipeline.orchestrator import ResearchOrchestrator
 from app.retrieval.embeddings import FastEmbedEmbedder
@@ -148,7 +148,9 @@ class TestStructuralBoundary:
         Synthesis has no prompt file: its operator text is the `CITED_SYSTEM`
         constant, checked alongside the two files that do exist.
         """
-        for name in ("plan.v1", "extract.v1"):
+        # Every prompt file on disk, discovered rather than listed: a new
+        # prompt version must not be able to arrive uncovered.
+        for name in sorted(p.stem for p in PROMPT_DIR.glob("*.md")):
             assert case.payload not in load_prompt(name)
         assert case.payload not in CITED_SYSTEM
         assert case.payload not in UNTRUSTED_CONTENT_POLICY

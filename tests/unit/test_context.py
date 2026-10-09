@@ -18,15 +18,17 @@ from app.llm.context import (
 
 
 class TestPromptLoading:
-    def test_loads_the_versioned_planning_prompt(self) -> None:
-        text = load_prompt("plan.v1")
+    @pytest.mark.parametrize("version", ["plan.v1", "plan.v2"])
+    def test_loads_the_versioned_planning_prompt(self, version: str) -> None:
+        """Superseded versions stay on disk for comparison (docs/prompt-engineering.md)."""
+        text = load_prompt(version)
         assert "research planner" in text.lower()
         # The hard rules are what keep the planner from answering the question.
         assert "Do not answer the research question" in text
 
     def test_repeated_loads_are_byte_identical(self) -> None:
         """A varying prefix would silently destroy the prompt cache (ADR-008)."""
-        assert load_prompt("plan.v1") == load_prompt("plan.v1")
+        assert load_prompt("plan.v2") == load_prompt("plan.v2")
 
     def test_missing_prompt_names_what_is_available(self) -> None:
         with pytest.raises(PromptNotFoundError, match="Available:"):

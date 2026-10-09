@@ -75,13 +75,28 @@ def frame_untrusted(text: str, *, source_label: str) -> str:
     )
 
 
-def build_plan_user_content(question: str, context: str | None) -> str:
+def build_plan_user_content(
+    question: str, context: str | None, *, max_sources: int | None = None
+) -> str:
     """Assemble the volatile half of the planning call.
 
     Goes after the cached system prefix, so the question varying per run does
     not invalidate the cache.
+
+    `max_sources` belongs here rather than in the prompt file for exactly that
+    reason: a caller may override it per request (`ResearchRequest.max_sources`),
+    so putting it in the cached system prefix would invalidate the cache on
+    every run with a different budget. Rule 1 of the context assembly rules —
+    stable content first.
     """
     parts = [f"Research question:\n{question}"]
+    if max_sources is not None:
+        # Stated as a fact about this run, not as an instruction: the rule for
+        # what to do about it lives in the prompt file.
+        parts.append(
+            f"Source budget for this run: {max_sources} source(s) maximum, "
+            "shared across all sub-questions."
+        )
     if context:
         # Caller-supplied, so framed as context rather than instruction — a
         # caller is more trusted than a web page but is still not the operator.

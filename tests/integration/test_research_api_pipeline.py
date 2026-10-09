@@ -584,3 +584,82 @@ class TestExceptionsAreNeverLost:
         # Generic on purpose: the sqlite message must not reach the caller.
         assert body["error"] == "Internal pipeline error."
         assert "disk I/O" not in (body["error"] or "")
+
+
+class TestUncitedProseNeverBecomesAClaim:
+    """F-020, end to end over HTTP.
+
+    The API returns a cited answer as interleaved cited and uncited text
+    blocks. Every fixture before this one emitted cited blocks only, so the
+    whole suite was blind to the shape production returns — 900+ tests passed
+    while the deployed service reported 20 claims of which 11 were fake
+    UNKNOWNs. `prose_blocks=True` reproduces the real shape.
+    """
+
+    @respx.mock
+    def test_the_report_carries_no_no_citation_claims(self, tmp_path: Path) -> None:
+        mount_sources()
+        client, _ = build_client(
+            api_settings(tmp_path),
+            llm=ScriptedLLM(plan=make_plan(("SQ1", "SQ2")), prose_blocks=True),
+        )
+        with client as c:
+            run_id = submit(c)
+            body = c.get(f"/research/{run_id}").json()
+
+        report = body["report"]
+        assert report is not None
+        every_claim = [
+            claim
+            for assessment in report["sub_questions"]
+            for key in ("supporting_claims", "unknown_claims")
+            for claim in assessment.get(key) or []
+        ]
+        assert every_claim, "the run produced no claims at all"
+        # The artefact signature: an UNKNOWN claim whose only failure is that
+        # it never carried a citation.
+        manufactured = [c for c in every_claim if c["failures"] == ["no_citation"]]
+        assert manufactured == [], manufactured
+        # And no claim text is one of the prose fragments.
+        texts = {c["text"] for c in every_claim}
+        assert "- **Drivers:**" not in texts
+        assert not any(t.startswith("**The attached documents") for t in texts)
+
+    @respx.mock
+    def test_every_reported_claim_carries_a_citation(self, tmp_path: Path) -> None:
+        """The invariant the filter establishes, asserted at the HTTP surface."""
+        mount_sources()
+        client, _ = build_client(
+            api_settings(tmp_path),
+            llm=ScriptedLLM(plan=make_plan(("SQ1", "SQ2")), prose_blocks=True),
+        )
+        with client as c:
+            run_id = submit(c)
+            body = c.get(f"/research/{run_id}").json()
+
+        for assessment in body["report"]["sub_questions"]:
+            for claim in assessment["supporting_claims"]:
+                assert claim["citations"], claim["text"]
+                assert claim["verified_citations"] >= 1
+
+    @respx.mock
+    def test_unsupported_claim_rate_is_not_inflated_by_formatting(self, tmp_path: Path) -> None:
+        """Metric 4 read 0.000 offline and 0.55 in production on the same code.
+
+        The offline figure was right about the model and wrong about the
+        pipeline. This pins the quantity the metric actually measures.
+        """
+        mount_sources()
+        client, _ = build_client(
+            api_settings(tmp_path),
+            llm=ScriptedLLM(plan=make_plan(("SQ1", "SQ2")), prose_blocks=True),
+        )
+        with client as c:
+            run_id = submit(c)
+            report = c.get(f"/research/{run_id}").json()["report"]
+
+        total = report["total_claims"]
+        unsupported = report["unknown_claims"]
+        assert total > 0
+        rate = unsupported / total
+        assert rate == 0.0, f"{unsupported}/{total} claims unsupported"
